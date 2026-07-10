@@ -5,34 +5,6 @@
 
 services:
   # ===========================================
-  # PostgreSQL Database
-  # ===========================================
-  postgres:
-    image: postgres:15-alpine
-    container_name: bela360-postgres
-    restart: always
-    ports:
-      - "127.0.0.1:5432:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - bela360-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-
-  # ===========================================
   # Redis
   # ===========================================
   redis:
@@ -57,53 +29,6 @@ services:
           memory: 256M
 
   # ===========================================
-  # Evolution API
-  # ===========================================
-  evolution-api:
-    image: evoapicloud/evolution-api:v2.3.7
-    container_name: bela360-evolution
-    restart: always
-    ports:
-      - "127.0.0.1:8080:8080"
-    environment:
-      - SERVER_URL=${EVOLUTION_PUBLIC_URL:-http://localhost:8080}
-      - AUTHENTICATION_TYPE=apikey
-      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
-      - DATABASE_ENABLED=true
-      - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=evolution
-      - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://redis:6379
-      - CACHE_REDIS_PREFIX_KEY=evolution
-      - CACHE_LOCAL_ENABLED=false
-      - WEBSOCKET_ENABLED=true
-      - LOG_LEVEL=ERROR,WARN,DEBUG,INFO,LOG,VERBOSE,DARK,WEBHOOKS,WEBSOCKET
-      - LOG_BAILEYS=info
-      - CONFIG_SESSION_PHONE_VERSION=2.3000.0
-      - WEBHOOK_GLOBAL_URL=http://api:3001/api/webhooks/whatsapp
-      - WEBHOOK_GLOBAL_ENABLED=true
-    volumes:
-      - evolution_instances:/evolution/instances
-      - evolution_store:/evolution/store
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    networks:
-      - bela360-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-
-  # ===========================================
   # Backend API
   # ===========================================
   api:
@@ -116,18 +41,17 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      - API_URL=${API_URL}
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - EVOLUTION_API_URL=http://evolution-api:8080
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL}
       - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
       - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME}
       - FRONTEND_URL=${FRONTEND_URL}
       - SENTRY_DSN=${SENTRY_DSN}
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -180,8 +104,6 @@ services:
         condition: service_started
       api:
         condition: service_started
-      evolution-api:
-        condition: service_healthy
     networks:
       - bela360-network
     deploy:
@@ -194,8 +116,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   redis_data:
-  evolution_instances:
-  evolution_store:
   nginx_cache:
