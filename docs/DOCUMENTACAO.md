@@ -1,8 +1,8 @@
 # Documentação Geral — bela360
 
-**Última atualização:** 2026-07-09
+**Última atualização:** 2026-07-10
 **Repositório:** https://github.com/andersondreger/bela360
-**Domínio de produção:** https://bela360.wayia.com.br
+**Domínio de produção:** https://bela360.wayia.com.br (no ar)
 
 ---
 
@@ -28,32 +28,34 @@ Módulos implementados no backend: autenticação (OTP via WhatsApp), negócios,
                          │ bela360.wayia.com.br  │
                          └──────────┬───────────┘
                                     │
-                         ┌──────────▼───────────┐
-                         │   Nginx (VPS, SSL)     │
-                         └───┬───────────┬───────┘
-                 /  (root)   │           │  /api, api.*
-                 ┌───────────▼──┐   ┌────▼─────────┐
+                         ┌──────────▼────────────┐
+                         │  Traefik (VPS, SSL)     │  ← compartilhado com outros
+                         └───┬────────────┬───────┘     projetos na mesma VPS
+              Host(dominio)  │            │  Host(dominio) && PathPrefix(/api)
+                 ┌───────────▼──┐   ┌─────▼────────┐
                  │  Web (Next.js)│   │ API (Express) │
                  │   porta 3000  │   │  porta 3001   │
                  └───────────────┘   └───┬───────┬───┘
                                           │       │
                                 ┌─────────▼──┐ ┌──▼───────┐
-                                │  Supabase   │ │  Redis    │
-                                │ (Postgres)  │ │ (BullMQ)  │
+                                │  Postgres   │ │  Redis    │
+                                │ (container) │ │ (BullMQ)  │
                                 └─────────────┘ └───────────┘
                                           │
                                 ┌─────────▼──────────┐
                                 │  Evolution API v2    │
-                                │  (WhatsApp gateway)  │
+                                │ evo2.wayiaflow.com.br │
+                                │ (instância externa,   │
+                                │  fora deste compose)  │
                                 └───────────────────────┘
 ```
 
 - **Monorepo** gerenciado com `pnpm` workspaces (`apps/api`, `apps/web`, `packages/shared`).
-- **Backend (`apps/api`)**: Node.js + Express + TypeScript. ORM Prisma sobre PostgreSQL (Supabase). Filas assíncronas com BullMQ + Redis (envio de mensagens, lembretes, automações). Autenticação via JWT + refresh token, login por OTP enviado no WhatsApp. Logs estruturados com Pino.
+- **Backend (`apps/api`)**: Node.js + Express + TypeScript. ORM Prisma sobre PostgreSQL. Filas assíncronas com BullMQ + Redis (envio de mensagens, lembretes, automações). Autenticação via JWT + refresh token, login por OTP enviado no WhatsApp. Logs estruturados com Pino.
 - **Frontend (`apps/web`)**: Next.js 14 (App Router) + React 18 + Tailwind CSS + TanStack Query + Recharts.
-- **Integração WhatsApp**: [Evolution API v2](https://github.com/EvolutionAPI/evolution-api) — gateway open-source que conecta a um número de WhatsApp via QR Code e expõe API REST + webhooks. O bela360 usa a Evolution API para enviar mensagens (texto, botões, listas) e para receber respostas via webhook, processadas por um chatbot simples de detecção de intenção.
-- **Banco de dados**: PostgreSQL gerenciado pelo **Supabase**, acessado via Prisma (`DATABASE_URL`). Não usa neste momento os SDKs de Auth/Storage do Supabase — apenas o Postgres.
-- **Infraestrutura**: self-hosted em VPS via Docker Compose + Nginx + Let's Encrypt (certbot).
+- **Integração WhatsApp**: [Evolution API v2](https://github.com/EvolutionAPI/evolution-api) — instância própria já em produção em `https://evo2.wayiaflow.com.br` (fora do compose do bela360, compartilhada por outros projetos da mesma VPS). O bela360 se conecta a ela via `EVOLUTION_API_URL`/`EVOLUTION_API_KEY`, cria sua própria instância (`bela360_system`) e configura o webhook automaticamente (`/api/whatsapp/webhook`) na primeira ativação. Importante: a Evolution API v2 espera os nomes de eventos de webhook em `UPPER_SNAKE_CASE` (`CONNECTION_UPDATE`, `MESSAGES_UPSERT`, `QRCODE_UPDATED` etc.) — ver `apps/api/src/modules/whatsapp/whatsapp.controller.ts`.
+- **Banco de dados**: PostgreSQL. **Estado atual: container Postgres local** (serviço `postgres` do `docker-compose.prod.yml`), usado como fallback. A migração planejada para **Supabase** ficou temporariamente bloqueada (o pooler do Supabase ativou um circuit breaker de segurança após tentativas de conexão com senha incorreta) — trocar `DATABASE_URL` para a connection string do Supabase (pooler `aws-1-sa-east-1.pooler.supabase.com`, projeto `dteagxhnuhejefvguxfw`) assim que o bloqueio expirar é a próxima etapa pendente.
+- **Infraestrutura**: VPS compartilhada com outros projetos (pet360, imob360 etc.), todos atrás de um **Traefik** único (container `traefik`, gerenciado via Portainer em `/root/Portainer/docker-compose.yml`) que cuida do roteamento por domínio e emissão automática de SSL (Let's Encrypt, resolver `leresolver`). O bela360 **não usa nginx nem certbot próprios** — apenas labels do Traefik no `docker-compose.prod.yml`. Para o Traefik enxergar os containers do bela360, a rede do projeto precisa estar conectada a ele: `docker network connect bela360_default traefik` (necessário uma vez, ou de novo se a rede for recriada).
 
 ---
 
@@ -67,7 +69,7 @@ Módulos implementados no backend: autenticação (OTP via WhatsApp), negócios,
 | Filas / Cache | Redis + BullMQ |
 | WhatsApp | Evolution API v2 |
 | Autenticação | JWT (access + refresh) via OTP no WhatsApp |
-| Infra | Docker, Docker Compose, Nginx, Let's Encrypt |
+| Infra | Docker, Docker Compose, Traefik (roteamento + SSL automático) |
 | Gerenciador de pacotes | pnpm (workspaces) |
 
 ---
@@ -137,31 +139,39 @@ Arquivo base: `.env.example`. As principais:
 
 ## 7. Deploy em produção
 
-Ambiente atual: **VPS própria** (Docker Compose) + **Supabase** (Postgres) + **Evolution API** (própria instância) + **Cloudflare** (DNS) + **Let's Encrypt** (SSL).
+Ambiente atual: **VPS compartilhada** (Docker Compose + Traefik) + **Postgres em container** (fallback, Supabase pendente) + **Evolution API externa** (`evo2.wayiaflow.com.br`) + **Cloudflare** (DNS).
 
-Domínios:
-- `https://bela360.wayia.com.br` → frontend (Next.js)
-- `https://api.bela360.wayia.com.br` → backend (Express)
-- (opcional) `https://whatsapp.bela360.wayia.com.br` → painel da Evolution API, se auto-hospedada
+> **Nota:** o guia [`docs/DEPLOY-VPS.md`](./DEPLOY-VPS.md) descreve um setup com nginx próprio + certbot manual — **está desatualizado**. O deploy real usa o Traefik já existente na VPS (ver seção 2). Mantido apenas como referência histórica.
 
-Passo a passo detalhado (SSH, Docker, Nginx, SSL, migrações): ver [`docs/DEPLOY-VPS.md`](./DEPLOY-VPS.md).
+Domínio único: `https://bela360.wayia.com.br` — frontend na raiz, API em `/api/*` (roteado pelo Traefik via `PathPrefix`, sem necessidade de subdomínio `api.*`).
 
-Diferença em relação ao guia original: o serviço `postgres` do `docker-compose.prod.yml` é **substituído pelo Postgres do Supabase** — não sobe container de banco local em produção, apenas `DATABASE_URL` apontando para o Supabase.
-
-Comandos usuais:
+Passo a passo real usado:
 
 ```bash
-# subir/atualizar
-cd ~/bela360
-git pull origin main
+cd /root/projetos/bela360
+
+# 1. .env de produção (não versionado) com DATABASE_URL, JWT_*, EVOLUTION_*, API_URL, FRONTEND_URL
+#    (ver seção 6)
+
+# 2. build + subir os containers do projeto
 docker compose -f docker-compose.prod.yml up -d --build
 
-# migrações (contra o Supabase)
-docker compose -f docker-compose.prod.yml exec api npx prisma migrate deploy
+# 3. conectar a rede do projeto ao Traefik compartilhado (só necessário na 1a vez
+#    ou se a rede "bela360_default" for recriada)
+docker network connect bela360_default traefik
 
-# logs
+# 4. migrações do Prisma (rodar de dentro de apps/api, onde está o schema)
+docker compose -f docker-compose.prod.yml exec api sh -c "cd apps/api && node_modules/.bin/prisma migrate deploy"
+
+# 5. logs
 docker compose -f docker-compose.prod.yml logs -f api
 ```
+
+**Pegadinhas já resolvidas (documentadas para não se repetir):**
+- `npx prisma` dentro do container busca uma versão nova do npm em vez de usar a já instalada — use o binário local (`apps/api/node_modules/.bin/prisma`) a partir de `apps/api`, onde fica `prisma/schema.prisma`.
+- Os `HEALTHCHECK` dos Dockerfiles usavam `wget http://localhost:PORT`, que resolve para `::1` (IPv6) e falha em containers sem IPv6 interno — o container fica marcado **unhealthy** mesmo funcionando normalmente, e **o Traefik ignora containers unhealthy no roteamento** (a rota some silenciosamente, sem erro óbvio). Corrigido para `127.0.0.1` em `docker/api/Dockerfile` e `docker/web/Dockerfile`.
+- A Evolution API v2 exige os nomes de eventos de webhook em `UPPER_SNAKE_CASE`; o código antigo enviava em `lower.case`, causando erro 400 ao configurar o webhook (não impedia a criação da instância/QR Code, só a configuração do webhook). Corrigido em `whatsapp.controller.ts`.
+- Containers sem `traefik.enable: "false"` explícito ficam auto-expostos pelo provider Docker do Traefik (ex.: `postgres`/`redis` ganhavam um router `Host(nome-do-container)`) — inofensivo aqui, mas foi desabilitado por higiene.
 
 ---
 
@@ -187,6 +197,7 @@ Documentos complementares já existentes no projeto:
 ## 9. Segurança e boas práticas
 
 - Segredos (JWT, API keys, `DATABASE_URL`) só existem no `.env` do servidor — nunca no repositório.
-- Rate limiting configurado no Express (`RATE_LIMIT_*`) e no Nginx para a rota da API.
-- HTTPS obrigatório em produção via Let's Encrypt, renovação automática via cron/certbot.
+- Rate limiting configurado no próprio Express (`RATE_LIMIT_*`).
+- HTTPS obrigatório em produção via Let's Encrypt, emitido e renovado automaticamente pelo Traefik compartilhado (sem cron/certbot manual).
 - Dados de clientes (nome, telefone) são PII — tratar conforme LGPD (ver `docs/architecture.md`, seção de proteção de dados).
+- A VPS é compartilhada com outros projetos (pet360, imob360, n8n, typebot etc.) — evitar comandos destrutivos amplos (`docker system prune`, `docker network rm` em redes que não são do bela360) sem checar o que mais está rodando (`docker ps`).
