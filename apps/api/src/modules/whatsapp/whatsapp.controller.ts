@@ -38,7 +38,7 @@ export class WhatsAppController {
       const webhookUrl = `${env.API_URL || 'http://localhost:3001'}/api/whatsapp/webhook`;
       await systemWhatsApp.configureWebhook({
         url: webhookUrl,
-        events: ['connection.update', 'qrcode.updated'],
+        events: ['CONNECTION_UPDATE', 'QRCODE_UPDATED'],
       });
 
       // Get QR code
@@ -130,10 +130,10 @@ export class WhatsAppController {
       await whatsapp.configureWebhook({
         url: webhookUrl,
         events: [
-          'messages.upsert',
-          'messages.update',
-          'connection.update',
-          'qrcode.updated',
+          'MESSAGES_UPSERT',
+          'MESSAGES_UPDATE',
+          'CONNECTION_UPDATE',
+          'QRCODE_UPDATED',
         ],
       });
 
