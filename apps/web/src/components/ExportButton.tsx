@@ -29,10 +29,10 @@ export function ExportButton({ onExport, disabled, loading }: ExportButtonProps)
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled || loading}
-        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground bg-card border border-input rounded-lg hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? (
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-purple-600" />
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-input border-t-primary" />
         ) : (
           <Download className="h-4 w-4" />
         )}
@@ -46,13 +46,13 @@ export function ExportButton({ onExport, disabled, loading }: ExportButtonProps)
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 z-20 mt-2 w-48 origin-top-right rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+          <div className="absolute right-0 z-20 mt-2 w-48 origin-top-right rounded-lg bg-card shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
             <div className="py-1">
               {formats.map(({ format, label, icon }) => (
                 <button
                   key={format}
                   onClick={() => handleExport(format)}
-                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted"
                 >
                   {icon}
                   <span>{label}</span>
@@ -90,10 +90,10 @@ export function SimpleExportButton({
     <button
       onClick={() => onExport(format)}
       disabled={disabled || loading}
-      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {loading ? (
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-purple-600" />
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-input border-t-primary" />
       ) : (
         icons[format]
       )}

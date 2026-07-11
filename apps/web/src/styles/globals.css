@@ -4,48 +4,52 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 276 45% 98%;
+    --foreground: 273 35% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 273 35% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 262 83% 58%; /* Purple */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 330 81% 60%; /* Pink */
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 262 83% 95%;
-    --accent-foreground: 262 83% 30%;
+    --popover-foreground: 273 35% 12%;
+    --primary: 271 91% 56%; /* Orchid violet */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 337 87% 61%; /* Vivid rose */
+    --secondary-foreground: 0 0% 100%;
+    --gold: 38 92% 58%; /* Champagne accent */
+    --gold-foreground: 30 60% 15%;
+    --muted: 270 40% 96%;
+    --muted-foreground: 273 15% 45%;
+    --accent: 271 91% 96%;
+    --accent-foreground: 271 60% 32%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 262 83% 58%;
-    --radius: 0.5rem;
+    --border: 270 30% 90%;
+    --input: 270 30% 90%;
+    --ring: 271 91% 56%;
+    --radius: 1rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 262 83% 58%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 330 81% 60%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 262 30% 20%;
-    --accent-foreground: 262 83% 80%;
-    --destructive: 0 62.8% 50%;
+    --background: 267 47% 7%;
+    --foreground: 270 40% 96%;
+    --card: 267 40% 10%;
+    --card-foreground: 270 40% 96%;
+    --popover: 267 40% 10%;
+    --popover-foreground: 270 40% 96%;
+    --primary: 271 91% 66%;
+    --primary-foreground: 267 47% 7%;
+    --secondary: 337 87% 66%;
+    --secondary-foreground: 267 47% 7%;
+    --gold: 38 92% 62%;
+    --gold-foreground: 30 60% 12%;
+    --muted: 267 25% 16%;
+    --muted-foreground: 270 20% 68%;
+    --accent: 267 30% 18%;
+    --accent-foreground: 271 80% 82%;
+    --destructive: 0 62.8% 55%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 262 83% 58%;
+    --border: 267 25% 20%;
+    --input: 267 25% 20%;
+    --ring: 271 91% 66%;
   }
 }
 
@@ -56,6 +60,48 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-bela-purple via-bela-pink to-bela-gold;
+  }
+
+  .bg-gradient-brand {
+    @apply bg-gradient-to-br from-bela-purple via-fuchsia-600 to-bela-pink;
+  }
+
+  .glass {
+    background: hsl(var(--card) / 0.55);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid hsl(var(--foreground) / 0.08);
+  }
+
+  .glass-dark {
+    background: hsl(0 0% 100% / 0.06);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid hsl(0 0% 100% / 0.12);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 8px 40px -8px hsl(var(--primary) / 0.45);
+  }
+
+  .noise-overlay {
+    position: relative;
+  }
+
+  .noise-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 }
 

@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Megaphone,
   Users,
   Star,
-  Send,
   Plus,
   Crown,
   UserPlus,
@@ -13,6 +11,15 @@ import {
   Gift,
   TrendingUp,
 } from 'lucide-react';
+import {
+  PageHeader,
+  Button,
+  Badge,
+  Modal,
+  Input,
+  Select,
+  Textarea,
+} from '@/components/ui';
 
 interface Campaign {
   id: string;
@@ -42,11 +49,14 @@ const segmentInfo = {
   BIRTHDAY_MONTH: { name: 'Aniversariantes', icon: Gift, color: 'bg-pink-100 text-pink-600' },
 };
 
-const statusLabels: Record<string, { label: string; color: string }> = {
-  DRAFT: { label: 'Rascunho', color: 'bg-gray-100 text-gray-700' },
-  SCHEDULED: { label: 'Agendada', color: 'bg-blue-100 text-blue-700' },
-  SENDING: { label: 'Enviando', color: 'bg-yellow-100 text-yellow-700' },
-  COMPLETED: { label: 'Concluída', color: 'bg-green-100 text-green-700' },
+const statusLabels: Record<
+  string,
+  { label: string; variant: 'outline' | 'info' | 'warning' | 'success' }
+> = {
+  DRAFT: { label: 'Rascunho', variant: 'outline' },
+  SCHEDULED: { label: 'Agendada', variant: 'info' },
+  SENDING: { label: 'Enviando', variant: 'warning' },
+  COMPLETED: { label: 'Concluída', variant: 'success' },
 };
 
 export default function MarketingPage() {
@@ -159,28 +169,19 @@ export default function MarketingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Megaphone className="h-6 w-6 text-purple-500" />
-            Marketing
-          </h1>
-          <p className="text-muted-foreground">
-            Campanhas, segmentação de clientes e avaliações
-          </p>
-        </div>
-
-        <button
-          onClick={() => setShowNewCampaign(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Nova Campanha
-        </button>
-      </div>
+      <PageHeader
+        title="Marketing"
+        description="Campanhas, segmentação de clientes e avaliações"
+        actions={
+          <Button onClick={() => setShowNewCampaign(true)}>
+            <Plus className="h-4 w-4" />
+            Nova Campanha
+          </Button>
+        }
+      />
 
       {/* Rating Stats */}
-      <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-6 text-white">
+      <div className="noise-overlay rounded-2xl bg-gradient-to-r from-bela-gold via-amber-500 to-orange-500 p-6 text-white shadow-glow">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-white/80">Avaliação Média</p>
@@ -209,8 +210,11 @@ export default function MarketingPage() {
                          (key === 'BIRTHDAY_MONTH' ? segments?.birthdayMonth : 0);
 
             return (
-              <div key={key} className="bg-card rounded-lg border p-4 text-center">
-                <div className={`inline-flex p-3 rounded-lg ${info.color} mb-2`}>
+              <div
+                key={key}
+                className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className={`inline-flex p-3 rounded-xl ${info.color} mb-2`}>
                   <Icon className="h-5 w-5" />
                 </div>
                 <p className="text-2xl font-bold">{count}</p>
@@ -224,7 +228,7 @@ export default function MarketingPage() {
       {/* Campaigns */}
       <div>
         <h2 className="text-lg font-semibold mb-4">Campanhas Recentes</h2>
-        <div className="bg-card rounded-lg border overflow-hidden">
+        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
           <table className="w-full">
             <thead className="bg-muted/50">
               <tr>
@@ -245,7 +249,7 @@ export default function MarketingPage() {
                   : 0;
 
                 return (
-                  <tr key={campaign.id} className="border-t hover:bg-muted/30">
+                  <tr key={campaign.id} className="border-t border-border hover:bg-muted/30">
                     <td className="p-4">
                       <p className="font-medium">{campaign.name}</p>
                       <p className="text-sm text-muted-foreground">
@@ -279,9 +283,7 @@ export default function MarketingPage() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${status?.color}`}>
-                        {status?.label}
-                      </span>
+                      <Badge variant={status?.variant || 'outline'}>{status?.label}</Badge>
                     </td>
                   </tr>
                 );
@@ -298,90 +300,68 @@ export default function MarketingPage() {
       </div>
 
       {/* New Campaign Modal */}
-      {showNewCampaign && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Nova Campanha</h2>
-            <form onSubmit={handleSubmitCampaign} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nome da campanha *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Promocao de Verao"
-                  required
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Segmento de clientes</label>
-                <select
-                  value={formData.segmentType}
-                  onChange={(e) => setFormData(prev => ({ ...prev, segmentType: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  {Object.entries(segmentInfo).map(([key, info]) => (
-                    <option key={key} value={key}>
-                      {info.name} ({getRecipientCount(key)} clientes)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Mensagem *</label>
-                <textarea
-                  value={formData.message}
-                  onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
-                  placeholder="Digite a mensagem que sera enviada aos clientes..."
-                  rows={4}
-                  required
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use {'{nome}'} para personalizar com o nome do cliente
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Agendar envio (opcional)</label>
-                <input
-                  type="datetime-local"
-                  value={formData.scheduledDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Deixe vazio para enviar imediatamente
-                </p>
-              </div>
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <p className="text-sm font-medium">Resumo da campanha:</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Sera enviada para <span className="font-bold">{getRecipientCount(formData.segmentType)}</span> clientes
-                  do segmento <span className="font-bold">{segmentInfo[formData.segmentType as keyof typeof segmentInfo]?.name}</span>
-                </p>
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border text-muted-foreground rounded-lg hover:bg-muted"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {saving ? 'Criando...' : formData.scheduledDate ? 'Agendar Campanha' : 'Enviar Agora'}
-                </button>
-              </div>
-            </form>
+      <Modal open={showNewCampaign} onClose={handleCloseModal} title="Nova Campanha">
+        <form onSubmit={handleSubmitCampaign} className="space-y-4">
+          <Input
+            label="Nome da campanha *"
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Ex: Promocao de Verao"
+            required
+          />
+          <Select
+            label="Segmento de clientes"
+            value={formData.segmentType}
+            onChange={(e) => setFormData(prev => ({ ...prev, segmentType: e.target.value }))}
+          >
+            {Object.entries(segmentInfo).map(([key, info]) => (
+              <option key={key} value={key}>
+                {info.name} ({getRecipientCount(key)} clientes)
+              </option>
+            ))}
+          </Select>
+          <div>
+            <Textarea
+              label="Mensagem *"
+              value={formData.message}
+              onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
+              placeholder="Digite a mensagem que sera enviada aos clientes..."
+              rows={4}
+              required
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Use {'{nome}'} para personalizar com o nome do cliente
+            </p>
           </div>
-        </div>
-      )}
+          <div>
+            <Input
+              label="Agendar envio (opcional)"
+              type="datetime-local"
+              value={formData.scheduledDate}
+              onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Deixe vazio para enviar imediatamente
+            </p>
+          </div>
+          <div className="p-4 bg-muted/50 rounded-xl">
+            <p className="text-sm font-medium">Resumo da campanha:</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Sera enviada para <span className="font-bold">{getRecipientCount(formData.segmentType)}</span> clientes
+              do segmento <span className="font-bold">{segmentInfo[formData.segmentType as keyof typeof segmentInfo]?.name}</span>
+            </p>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button type="button" variant="outline" onClick={handleCloseModal} disabled={saving} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="submit" loading={saving} className="flex-1">
+              {saving ? 'Criando...' : formData.scheduledDate ? 'Agendar Campanha' : 'Enviar Agora'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

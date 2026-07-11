@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { ExportButton } from '@/components/ExportButton';
 import { exportData, ExportFormat } from '@/lib/export';
+import { Button, Input, Textarea, Modal, PageHeader, Badge } from '@/components/ui';
 
 interface Service {
   id: string;
@@ -164,282 +166,222 @@ export default function ServicosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Servicos</h1>
-          <p className="text-gray-600">{services.filter(s => s.active).length} servicos ativos</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-            />
-            Mostrar inativos
-          </label>
-          <ExportButton onExport={handleExport} loading={exporting} />
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            + Novo Servico
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Servicos"
+        description={`${services.filter(s => s.active).length} servicos ativos`}
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="rounded border-border text-primary focus:ring-ring"
+              />
+              Mostrar inativos
+            </label>
+            <ExportButton onExport={handleExport} loading={exporting} />
+            <Button onClick={() => setShowNewModal(true)}>
+              <Plus className="h-4 w-4" />
+              Novo Servico
+            </Button>
+          </>
+        }
+      />
 
       {/* Services Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredServices.map((service) => (
           <div
             key={service.id}
-            className={`bg-white rounded-lg border p-6 ${
-              service.active ? 'border-gray-200' : 'border-gray-200 opacity-60'
+            className={`rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md ${
+              service.active ? '' : 'opacity-60'
             }`}
           >
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-gray-800">{service.name}</h3>
-                <p className="text-sm text-gray-500">{formatDuration(service.duration)}</p>
+                <h3 className="font-semibold text-foreground">{service.name}</h3>
+                <p className="text-sm text-muted-foreground">{formatDuration(service.duration)}</p>
               </div>
-              <span className="text-lg font-bold text-purple-600">
+              <span className="text-lg font-bold text-primary">
                 {formatCurrency(service.price)}
               </span>
             </div>
 
             <div className="mb-4">
-              <p className="text-xs text-gray-500 mb-2">Profissionais:</p>
+              <p className="text-xs text-muted-foreground mb-2">Profissionais:</p>
               <div className="flex flex-wrap gap-2">
                 {service.professionals.map((prof) => (
-                  <span
-                    key={prof}
-                    className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
-                  >
+                  <Badge key={prof} variant="default">
                     {prof}
-                  </span>
+                  </Badge>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-              <button
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              <Badge
+                variant={service.active ? 'success' : 'outline'}
+                className="cursor-pointer hover:underline"
                 onClick={() => handleToggleActive(service)}
-                className={`text-xs font-medium cursor-pointer hover:underline ${
-                  service.active ? 'text-green-600' : 'text-gray-400'
-                }`}
               >
                 {service.active ? 'Ativo' : 'Inativo'}
-              </button>
-              <button
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary hover:text-primary"
                 onClick={() => handleEdit(service)}
-                className="text-purple-600 hover:text-purple-800 text-sm font-medium"
               >
                 Editar
-              </button>
+              </Button>
             </div>
           </div>
         ))}
       </div>
 
       {/* New Service Modal */}
-      {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Novo Servico</h2>
-            <form onSubmit={handleSubmitNew} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome do servico *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Corte Feminino"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descricao (opcional)
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Descricao do servico..."
-                  rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Duracao (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.duration}
-                    onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
-                    min="15"
-                    step="15"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Preco (R$) *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.price || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                    placeholder="80.00"
-                    min="0"
-                    step="0.01"
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Profissionais que realizam
-                </label>
-                <div className="space-y-2">
-                  {availableProfessionals.map((prof) => (
-                    <label key={prof} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.professionals.includes(prof)}
-                        onChange={() => handleProfessionalToggle(prof)}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="text-sm text-gray-700">{prof}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModals}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                >
-                  {saving ? 'Salvando...' : 'Criar Servico'}
-                </button>
-              </div>
-            </form>
+      <Modal open={showNewModal} onClose={handleCloseModals} title="Novo Servico">
+        <form onSubmit={handleSubmitNew} className="space-y-4">
+          <Input
+            label="Nome do servico *"
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Ex: Corte Feminino"
+            required
+          />
+          <Textarea
+            label="Descricao (opcional)"
+            value={formData.description}
+            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Descricao do servico..."
+            rows={2}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Duracao (minutos)"
+              type="number"
+              value={formData.duration}
+              onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+              min="15"
+              step="15"
+            />
+            <Input
+              label="Preco (R$) *"
+              type="number"
+              value={formData.price || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+              placeholder="80.00"
+              min="0"
+              step="0.01"
+              required
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <p className="mb-2 block text-sm font-medium text-foreground">
+              Profissionais que realizam
+            </p>
+            <div className="space-y-2">
+              {availableProfessionals.map((prof) => (
+                <label key={prof} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.professionals.includes(prof)}
+                    onChange={() => handleProfessionalToggle(prof)}
+                    className="rounded border-border text-primary focus:ring-ring"
+                  />
+                  <span className="text-sm text-foreground">{prof}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseModals}
+              disabled={saving}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" loading={saving} className="flex-1">
+              {saving ? 'Salvando...' : 'Criar Servico'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Edit Service Modal */}
-      {showEditModal && selectedService && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Editar Servico</h2>
-            <form onSubmit={handleSubmitEdit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome do servico *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descricao
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Duracao (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.duration}
-                    onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
-                    min="15"
-                    step="15"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Preco (R$) *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                    min="0"
-                    step="0.01"
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Profissionais que realizam
-                </label>
-                <div className="space-y-2">
-                  {availableProfessionals.map((prof) => (
-                    <label key={prof} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.professionals.includes(prof)}
-                        onChange={() => handleProfessionalToggle(prof)}
-                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <span className="text-sm text-gray-700">{prof}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModals}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                >
-                  {saving ? 'Salvando...' : 'Salvar Alteracoes'}
-                </button>
-              </div>
-            </form>
+      <Modal open={showEditModal && !!selectedService} onClose={handleCloseModals} title="Editar Servico">
+        <form onSubmit={handleSubmitEdit} className="space-y-4">
+          <Input
+            label="Nome do servico *"
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            required
+          />
+          <Textarea
+            label="Descricao"
+            value={formData.description}
+            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+            rows={2}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Duracao (minutos)"
+              type="number"
+              value={formData.duration}
+              onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 60 }))}
+              min="15"
+              step="15"
+            />
+            <Input
+              label="Preco (R$) *"
+              type="number"
+              value={formData.price}
+              onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+              min="0"
+              step="0.01"
+              required
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <p className="mb-2 block text-sm font-medium text-foreground">
+              Profissionais que realizam
+            </p>
+            <div className="space-y-2">
+              {availableProfessionals.map((prof) => (
+                <label key={prof} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.professionals.includes(prof)}
+                    onChange={() => handleProfessionalToggle(prof)}
+                    className="rounded border-border text-primary focus:ring-ring"
+                  />
+                  <span className="text-sm text-foreground">{prof}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCloseModals}
+              disabled={saving}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" loading={saving} className="flex-1">
+              {saving ? 'Salvando...' : 'Salvar Alteracoes'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

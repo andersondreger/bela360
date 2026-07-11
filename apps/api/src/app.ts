@@ -7,7 +7,7 @@ import { env, logger } from './config';
 import { errorHandler } from './common/middleware';
 import { whatsappRoutes } from './modules/whatsapp';
 import { authRoutes } from './modules/auth';
-import { businessRoutes } from './modules/business';
+import { businessRoutes, publicBusinessRoutes } from './modules/business';
 import { servicesRoutes } from './modules/services';
 import { clientsRoutes } from './modules/clients';
 import { appointmentsRoutes } from './modules/appointments';
@@ -105,6 +105,7 @@ app.get('/api', (_req: Request, res: Response) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/public/business', publicBusinessRoutes);
 app.use('/api/business', authMiddleware, businessRoutes);
 app.use('/api/services', authMiddleware, servicesRoutes);
 app.use('/api/appointments', authMiddleware, appointmentsRoutes);

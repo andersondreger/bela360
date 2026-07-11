@@ -49,11 +49,19 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        gold: {
+          DEFAULT: 'hsl(var(--gold))',
+          foreground: 'hsl(var(--gold-foreground))',
+        },
         // bela360 brand colors
         bela: {
-          purple: '#7C3AED',
+          purple: '#8B2FE0',
+          violet: '#A855F7',
           pink: '#EC4899',
-          light: '#F5F3FF',
+          rose: '#F0439C',
+          gold: '#F0B429',
+          light: '#F8F4FF',
+          plum: '#1A0B2E',
         },
       },
       borderRadius: {
@@ -73,10 +81,21 @@ module.exports = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: 0 },
         },
+        blob: {
+          '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
+          '33%': { transform: 'translate(4%, -6%) scale(1.08)' },
+          '66%': { transform: 'translate(-3%, 4%) scale(0.95)' },
+        },
+        'float-slow': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-14px)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        blob: 'blob 18s ease-in-out infinite',
+        'float-slow': 'float-slow 6s ease-in-out infinite',
       },
     },
   },

@@ -9,20 +9,81 @@ interface ApiResponse<T> {
   };
 }
 
+function getAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('accessToken');
+}
+
+function clearSessionAndRedirect() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('userRole');
+  window.location.href = '/';
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) return false;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (!res.ok) return false;
+
+        const json = await res.json();
+        if (!json.success || !json.data?.accessToken) return false;
+
+        localStorage.setItem('accessToken', json.data.accessToken);
+        localStorage.setItem('refreshToken', json.data.refreshToken);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+
+  return refreshPromise;
+}
+
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  isRetry = false
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const token = getAccessToken();
 
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
     credentials: 'include',
   });
+
+  if (response.status === 401 && !isRetry) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      return request<T>(endpoint, options, true);
+    }
+    clearSessionAndRedirect();
+    throw new Error('Sessão expirada');
+  }
 
   const json: ApiResponse<T> = await response.json();
 

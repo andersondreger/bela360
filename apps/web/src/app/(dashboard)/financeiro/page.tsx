@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ExportButton } from '@/components/ExportButton';
 import { exportData, ExportFormat } from '@/lib/export';
+import { Button, Card, CardContent, Modal, Input, Select, PageHeader } from '@/components/ui';
 
 interface FinancialSummary {
   totalRevenue: number;
@@ -188,40 +189,36 @@ export default function FinanceiroPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <DollarSign className="h-6 w-6 text-green-500" />
-            Financeiro
-          </h1>
-          <p className="text-muted-foreground">
-            Controle de receitas, comissões e fechamento de caixa
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="px-3 py-2 bg-card border rounded-lg text-sm"
-          >
-            <option value="today">Hoje</option>
-            <option value="week">Esta Semana</option>
-            <option value="month">Este Mês</option>
-            <option value="year">Este Ano</option>
-          </select>
-          <ExportButton onExport={handleExportReport} loading={exporting} />
-        </div>
-      </div>
+      <PageHeader
+        title="Financeiro"
+        description="Controle de receitas, comissões e fechamento de caixa"
+        actions={
+          <>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="h-11 rounded-xl border border-input bg-background px-3 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="today">Hoje</option>
+              <option value="week">Esta Semana</option>
+              <option value="month">Este Mês</option>
+              <option value="year">Este Ano</option>
+            </select>
+            <ExportButton onExport={handleExportReport} loading={exporting} />
+          </>
+        }
+      />
 
       {/* Main Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Receita Total</p>
-            <ArrowUpRight className="h-4 w-4 text-green-500" />
+            <span className="text-sm font-medium text-muted-foreground">Receita Total</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <ArrowUpRight className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-green-500">
+          <p className="mt-3 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
             {formatCurrency(summary?.totalRevenue || 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -229,12 +226,14 @@ export default function FinanceiroPage() {
           </p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Comissões</p>
-            <Users className="h-4 w-4 text-orange-500" />
+            <span className="text-sm font-medium text-muted-foreground">Comissões</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <Users className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-orange-500">
+          <p className="mt-3 text-3xl font-bold text-amber-600 dark:text-amber-400">
             {formatCurrency(summary?.totalCommissions || 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -242,12 +241,14 @@ export default function FinanceiroPage() {
           </p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Lucro do Salão</p>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-medium text-muted-foreground">Lucro do Salão</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <TrendingUp className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-blue-500">
+          <p className="mt-3 text-3xl font-bold text-cyan-600 dark:text-cyan-400">
             {formatCurrency(summary?.businessProfit || 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -255,12 +256,14 @@ export default function FinanceiroPage() {
           </p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Ticket Médio</p>
-            <DollarSign className="h-4 w-4 text-purple-500" />
+            <span className="text-sm font-medium text-muted-foreground">Ticket Médio</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <DollarSign className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-purple-500">
+          <p className="mt-3 text-3xl font-bold text-bela-purple">
             {formatCurrency(summary?.averageTicket || 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -271,96 +274,100 @@ export default function FinanceiroPage() {
 
       {/* Payment Methods */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="bg-card rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Por Forma de Pagamento</h2>
-          <div className="space-y-4">
-            {byMethod.map((method) => {
-              const Icon = methodIcons[method.method] || DollarSign;
-              const percentage = (method.total / (summary?.totalRevenue || 1)) * 100;
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Por Forma de Pagamento</h2>
+            <div className="space-y-4">
+              {byMethod.map((method) => {
+                const Icon = methodIcons[method.method] || DollarSign;
+                const percentage = (method.total / (summary?.totalRevenue || 1)) * 100;
 
-              return (
-                <div key={method.method} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        {methodLabels[method.method] || method.method}
-                      </span>
+                return (
+                  <div key={method.method} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {methodLabels[method.method] || method.method}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{formatCurrency(method.total)}</p>
+                        <p className="text-xs text-muted-foreground">{method.count} transações</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{formatCurrency(method.total)}</p>
-                      <p className="text-xs text-muted-foreground">{method.count} transações</p>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-brand rounded-full transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
                     </div>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Quick Actions */}
-        <div className="bg-card rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Ações Rápidas</h2>
-          <div className="grid gap-3">
-            <button
-              onClick={() => setShowPaymentModal(true)}
-              className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left"
-            >
-              <div className="p-2 bg-green-100 rounded-lg">
-                <DollarSign className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="font-medium">Registrar Pagamento</p>
-                <p className="text-sm text-muted-foreground">Adicionar novo pagamento</p>
-              </div>
-            </button>
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Ações Rápidas</h2>
+            <div className="grid gap-3">
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl hover:bg-muted transition-colors text-left"
+              >
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-500/15 rounded-xl">
+                  <DollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-medium">Registrar Pagamento</p>
+                  <p className="text-sm text-muted-foreground">Adicionar novo pagamento</p>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setShowCloseCashModal(true)}
-              className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left"
-            >
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Calendar className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="font-medium">Fechar Caixa</p>
-                <p className="text-sm text-muted-foreground">Finalizar o dia</p>
-              </div>
-            </button>
+              <button
+                onClick={() => setShowCloseCashModal(true)}
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl hover:bg-muted transition-colors text-left"
+              >
+                <div className="p-2 bg-cyan-100 dark:bg-cyan-500/15 rounded-xl">
+                  <Calendar className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                </div>
+                <div>
+                  <p className="font-medium">Fechar Caixa</p>
+                  <p className="text-sm text-muted-foreground">Finalizar o dia</p>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setShowCommissionsModal(true)}
-              className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left"
-            >
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Users className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="font-medium">Comissões Pendentes</p>
-                <p className="text-sm text-muted-foreground">Ver repasses</p>
-              </div>
-            </button>
+              <button
+                onClick={() => setShowCommissionsModal(true)}
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl hover:bg-muted transition-colors text-left"
+              >
+                <div className="p-2 bg-bela-purple/10 rounded-xl">
+                  <Users className="h-5 w-5 text-bela-purple" />
+                </div>
+                <div>
+                  <p className="font-medium">Comissões Pendentes</p>
+                  <p className="text-sm text-muted-foreground">Ver repasses</p>
+                </div>
+              </button>
 
-            <button
-              onClick={() => handleExportReport('xlsx')}
-              className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors text-left"
-            >
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="font-medium">Relatório Completo</p>
-                <p className="text-sm text-muted-foreground">Exportar Excel</p>
-              </div>
-            </button>
-          </div>
-        </div>
+              <button
+                onClick={() => handleExportReport('xlsx')}
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl hover:bg-muted transition-colors text-left"
+              >
+                <div className="p-2 bg-amber-100 dark:bg-amber-500/15 rounded-xl">
+                  <TrendingUp className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-medium">Relatório Completo</p>
+                  <p className="text-sm text-muted-foreground">Exportar Excel</p>
+                </div>
+              </button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Register Payment Modal */}

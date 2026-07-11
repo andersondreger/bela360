@@ -112,17 +112,17 @@ export function WhatsAppConfigModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+      <div className="relative bg-card rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-lg font-semibold text-foreground">
             Configurar WhatsApp
           </h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1 hover:bg-muted rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
@@ -131,26 +131,26 @@ export function WhatsAppConfigModal({
           {/* Checking status */}
           {state === 'checking' && (
             <div className="flex flex-col items-center py-8">
-              <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />
-              <p className="mt-4 text-gray-600">Verificando conexao...</p>
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <p className="mt-4 text-muted-foreground">Verificando conexao...</p>
             </div>
           )}
 
           {/* Disconnected - Show connect button */}
           {state === 'disconnected' && (
             <div className="flex flex-col items-center py-8">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <QrCode className="w-8 h-8 text-gray-400" />
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                <QrCode className="w-8 h-8 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-medium text-gray-800 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 WhatsApp Desconectado
               </h3>
-              <p className="text-gray-500 text-center mb-6">
+              <p className="text-muted-foreground text-center mb-6">
                 Conecte seu WhatsApp para receber e enviar mensagens automaticamente.
               </p>
               <button
                 onClick={handleConnect}
-                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                className="px-6 py-3 bg-gradient-brand text-white rounded-xl hover:brightness-110 transition-colors font-medium"
               >
                 Conectar WhatsApp
               </button>
@@ -160,16 +160,16 @@ export function WhatsAppConfigModal({
           {/* Connecting - Show QR Code */}
           {state === 'connecting' && (
             <div className="flex flex-col items-center py-4">
-              <h3 className="text-lg font-medium text-gray-800 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 Escaneie o QR Code
               </h3>
-              <p className="text-gray-500 text-center text-sm mb-4">
+              <p className="text-muted-foreground text-center text-sm mb-4">
                 Abra o WhatsApp no seu celular, va em Dispositivos conectados e escaneie o codigo abaixo.
               </p>
 
               {qrCode ? (
                 <div className="relative">
-                  <div className="bg-white p-4 rounded-xl border-2 border-purple-100">
+                  <div className="bg-card p-4 rounded-xl border-2 border-accent">
                     <img
                       src={qrCode}
                       alt="QR Code WhatsApp"
@@ -178,19 +178,19 @@ export function WhatsAppConfigModal({
                   </div>
                   <button
                     onClick={handleRefreshQR}
-                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-white border border-gray-200 rounded-full text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-2 shadow-sm"
+                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-card border border-border rounded-full text-sm text-muted-foreground hover:bg-muted/50 flex items-center gap-2 shadow-sm"
                   >
                     <RefreshCw className="w-4 h-4" />
                     Atualizar QR
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center justify-center w-64 h-64 bg-gray-50 rounded-xl">
-                  <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                <div className="flex items-center justify-center w-64 h-64 bg-muted/50 rounded-xl">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
                 </div>
               )}
 
-              <p className="mt-8 text-sm text-gray-400 flex items-center gap-2">
+              <p className="mt-8 text-sm text-muted-foreground flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Aguardando leitura do QR Code...
               </p>
@@ -203,14 +203,14 @@ export function WhatsAppConfigModal({
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
-              <h3 className="text-lg font-medium text-gray-800 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 WhatsApp Conectado
               </h3>
-              <p className="text-gray-500 text-center text-sm mb-2">
+              <p className="text-muted-foreground text-center text-sm mb-2">
                 Seu WhatsApp esta conectado e pronto para uso.
               </p>
               {status?.connectedAt && (
-                <p className="text-xs text-gray-400 mb-6">
+                <p className="text-xs text-muted-foreground mb-6">
                   Conectado desde: {new Date(status.connectedAt).toLocaleString('pt-BR')}
                 </p>
               )}
@@ -229,7 +229,7 @@ export function WhatsAppConfigModal({
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
                 <XCircle className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-lg font-medium text-gray-800 mb-2">
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 Erro na Conexao
               </h3>
               <p className="text-red-500 text-center text-sm mb-6">
@@ -237,7 +237,7 @@ export function WhatsAppConfigModal({
               </p>
               <button
                 onClick={handleConnect}
-                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                className="px-6 py-3 bg-gradient-brand text-white rounded-xl hover:brightness-110 transition-colors font-medium"
               >
                 Tentar Novamente
               </button>

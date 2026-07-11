@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Zap, MessageSquare, Gift, UserX, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Card, CardContent, Badge, PageHeader } from '@/components/ui';
 
 interface Automation {
   id: string;
@@ -79,77 +80,86 @@ export default function AutomacaoPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Zap className="h-6 w-6 text-yellow-500" />
-          Automação de Relacionamento
-        </h1>
-        <p className="text-muted-foreground">
-          Configure mensagens automáticas para engajar seus clientes
-        </p>
-      </div>
+      <PageHeader
+        title="Automação de Relacionamento"
+        description="Configure mensagens automáticas para engajar seus clientes"
+      />
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="bg-card rounded-lg border p-4">
-          <p className="text-sm text-muted-foreground">Mensagens Enviadas</p>
-          <p className="text-2xl font-bold text-green-500">{stats.sent}</p>
-        </div>
-        <div className="bg-card rounded-lg border p-4">
-          <p className="text-sm text-muted-foreground">Pendentes</p>
-          <p className="text-2xl font-bold text-yellow-500">{stats.pending}</p>
-        </div>
-        <div className="bg-card rounded-lg border p-4">
-          <p className="text-sm text-muted-foreground">Falhas</p>
-          <p className="text-2xl font-bold text-red-500">{stats.failed}</p>
-        </div>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Mensagens Enviadas</p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.sent}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Pendentes</p>
+            <p className="text-2xl font-bold text-amber-500">{stats.pending}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Falhas</p>
+            <p className="text-2xl font-bold text-red-500">{stats.failed}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Automations List */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Automações Configuradas</h2>
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Zap className="h-5 w-5 text-amber-500" />
+          Automações Configuradas
+        </h2>
 
         {automations.map(automation => {
           const typeInfo = automationTypes[automation.type as keyof typeof automationTypes];
           const Icon = typeInfo?.icon || Zap;
 
           return (
-            <div
-              key={automation.id}
-              className="bg-card rounded-lg border p-4 flex items-start justify-between gap-4"
-            >
-              <div className="flex items-start gap-4">
-                <div className={`p-2 rounded-lg bg-muted ${typeInfo?.color}`}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-medium">{typeInfo?.name || automation.type}</h3>
-                  <p className="text-sm text-muted-foreground">{automation.template}</p>
-                  <div className="flex gap-4 text-xs text-muted-foreground">
-                    {automation.delayHours && (
-                      <span>Enviar após: {automation.delayHours}h</span>
-                    )}
-                    {automation.delayDays && (
-                      <span>Enviar após: {automation.delayDays} dias</span>
-                    )}
-                    {automation.sendTime && (
-                      <span>Horário: {automation.sendTime}</span>
-                    )}
+            <Card key={automation.id}>
+              <CardContent className="p-4 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted ${typeInfo?.color}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium">{typeInfo?.name || automation.type}</h3>
+                      <Badge variant={automation.isActive ? 'success' : 'outline'}>
+                        {automation.isActive ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{automation.template}</p>
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      {automation.delayHours && (
+                        <span>Enviar após: {automation.delayHours}h</span>
+                      )}
+                      {automation.delayDays && (
+                        <span>Enviar após: {automation.delayDays} dias</span>
+                      )}
+                      {automation.sendTime && (
+                        <span>Horário: {automation.sendTime}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <button
-                onClick={() => toggleAutomation(automation.id)}
-                className="flex items-center gap-2 text-sm"
-              >
-                {automation.isActive ? (
-                  <ToggleRight className="h-8 w-8 text-green-500" />
-                ) : (
-                  <ToggleLeft className="h-8 w-8 text-muted-foreground" />
-                )}
-              </button>
-            </div>
+                <button
+                  onClick={() => toggleAutomation(automation.id)}
+                  className="flex items-center gap-2 text-sm"
+                  aria-label={automation.isActive ? 'Desativar automação' : 'Ativar automação'}
+                >
+                  {automation.isActive ? (
+                    <ToggleRight className="h-8 w-8 text-primary" />
+                  ) : (
+                    <ToggleLeft className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </button>
+              </CardContent>
+            </Card>
           );
         })}
       </div>

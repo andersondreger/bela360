@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { Skeleton, SkeletonList } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { PageHeader } from '@/components/ui';
 
 interface Appointment {
   id: string;
@@ -104,17 +105,17 @@ export default function ProfessionalAgendaPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return 'border-l-green-500 bg-green-50';
+        return 'border-l-emerald-500 bg-emerald-50 dark:bg-emerald-500/5';
       case 'CONFIRMED':
-        return 'border-l-blue-500 bg-blue-50';
+        return 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/5';
       case 'PENDING':
-        return 'border-l-yellow-500 bg-yellow-50';
+        return 'border-l-amber-500 bg-amber-50 dark:bg-amber-500/5';
       case 'CANCELLED':
-        return 'border-l-red-500 bg-red-50';
+        return 'border-l-destructive bg-red-50 dark:bg-red-500/5';
       case 'NO_SHOW':
-        return 'border-l-gray-500 bg-gray-50';
+        return 'border-l-muted-foreground bg-muted';
       default:
-        return 'border-l-gray-300 bg-white';
+        return 'border-l-border bg-card';
     }
   };
 
@@ -124,31 +125,27 @@ export default function ProfessionalAgendaPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Minha Agenda</h1>
-        <p className="text-gray-600">Seus atendimentos agendados</p>
-      </div>
+      <PageHeader title="Minha Agenda" description="Seus atendimentos agendados" />
 
       {/* Week Navigation */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigateWeek('prev')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-muted rounded-xl transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </button>
 
-          <h2 className="font-semibold text-gray-800">
+          <h2 className="font-semibold text-foreground">
             {selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
           </h2>
 
           <button
             onClick={() => navigateWeek('next')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-muted rounded-xl transition-colors"
           >
-            <ChevronRight className="w-5 h-5 text-gray-600" />
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
@@ -157,12 +154,12 @@ export default function ProfessionalAgendaPage() {
             <button
               key={index}
               onClick={() => setSelectedDate(date)}
-              className={`p-3 rounded-lg text-center transition-all ${
+              className={`p-3 rounded-xl text-center transition-all ${
                 isSelected(date)
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-gradient-brand text-white shadow-glow'
                   : isToday(date)
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'hover:bg-gray-100'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'hover:bg-muted'
               }`}
             >
               <p className="text-xs font-medium">{weekDays[date.getDay()]}</p>
@@ -173,16 +170,16 @@ export default function ProfessionalAgendaPage() {
       </div>
 
       {/* Day Summary */}
-      <div className="flex items-center justify-between bg-indigo-50 rounded-xl p-4">
+      <div className="flex items-center justify-between bg-accent rounded-2xl p-4">
         <div>
-          <p className="text-indigo-600 text-sm">
+          <p className="text-primary text-sm">
             {selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
-          <p className="text-xl font-bold text-gray-800">{appointments.length} atendimentos</p>
+          <p className="text-xl font-bold text-foreground">{appointments.length} atendimentos</p>
         </div>
         <div className="text-right">
-          <p className="text-indigo-600 text-sm">Total do dia</p>
-          <p className="text-xl font-bold text-gray-800">
+          <p className="text-primary text-sm">Total do dia</p>
+          <p className="text-xl font-bold text-foreground">
             {formatCurrency(appointments.reduce((sum, a) => sum + a.price, 0))}
           </p>
         </div>
@@ -198,31 +195,31 @@ export default function ProfessionalAgendaPage() {
           appointments.map((appointment) => (
             <div
               key={appointment.id}
-              className={`bg-white rounded-xl border border-gray-200 p-4 border-l-4 ${getStatusColor(appointment.status)}`}
+              className={`rounded-2xl border border-border p-4 border-l-4 shadow-sm ${getStatusColor(appointment.status)}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
-                  <div className="text-center bg-gray-100 rounded-lg p-3">
-                    <Clock className="w-5 h-5 text-gray-600 mx-auto mb-1" />
-                    <p className="font-bold text-gray-800">{appointment.time}</p>
-                    <p className="text-xs text-gray-500">{appointment.endTime}</p>
+                  <div className="text-center bg-muted rounded-xl p-3">
+                    <Clock className="w-5 h-5 text-muted-foreground mx-auto mb-1" />
+                    <p className="font-bold text-foreground">{appointment.time}</p>
+                    <p className="text-xs text-muted-foreground">{appointment.endTime}</p>
                   </div>
 
                   <div>
-                    <h3 className="font-semibold text-gray-800">{appointment.clientName}</h3>
-                    <p className="text-gray-600">{appointment.serviceName}</p>
-                    <p className="text-sm text-gray-500 mt-1">{appointment.clientPhone}</p>
+                    <h3 className="font-semibold text-foreground">{appointment.clientName}</h3>
+                    <p className="text-muted-foreground">{appointment.serviceName}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{appointment.clientPhone}</p>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <p className="font-bold text-indigo-600">{formatCurrency(appointment.price)}</p>
+                  <p className="font-bold text-primary">{formatCurrency(appointment.price)}</p>
                 </div>
               </div>
             </div>
           ))
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200">
+          <div className="rounded-2xl border border-border bg-card">
             <EmptyState
               icon="calendar"
               title="Agenda livre"

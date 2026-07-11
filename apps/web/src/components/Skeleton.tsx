@@ -9,13 +9,13 @@ interface SkeletonProps {
 
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
-    <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
+    <div className={`animate-pulse bg-muted rounded ${className}`} />
   );
 }
 
 export function SkeletonCard({ className = '' }: SkeletonProps) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 p-5 ${className}`}>
+    <div className={`bg-card rounded-xl border border-border p-5 ${className}`}>
       <div className="flex items-center gap-3 mb-3">
         <Skeleton className="w-10 h-10 rounded-lg" />
         <Skeleton className="w-20 h-4" />
@@ -28,7 +28,7 @@ export function SkeletonCard({ className = '' }: SkeletonProps) {
 
 export function SkeletonList({ count = 3 }: { count?: number }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+    <div className="bg-card rounded-xl border border-border divide-y divide-border">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="flex items-center justify-between p-4">
           <div className="flex items-center gap-4">
@@ -47,15 +47,15 @@ export function SkeletonList({ count = 3 }: { count?: number }) {
 
 export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="border-b border-gray-200 bg-gray-50 p-4">
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="border-b border-border bg-muted/50 p-4">
         <div className="flex gap-4">
           {Array.from({ length: cols }).map((_, i) => (
             <Skeleton key={i} className="flex-1 h-4" />
           ))}
         </div>
       </div>
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-border">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="p-4">
             <div className="flex gap-4">

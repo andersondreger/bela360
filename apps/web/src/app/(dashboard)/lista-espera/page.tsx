@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, UserPlus, Phone, Calendar, Sun, Sunset, Moon, Check, X } from 'lucide-react';
+import { Clock, UserPlus, Phone, Calendar, Sun, Sunset, Moon, X, Users } from 'lucide-react';
+import { Button, Badge, PageHeader } from '@/components/ui';
 
 interface WaitlistEntry {
   id: string;
@@ -28,6 +29,18 @@ const periodLabels = {
   EVENING: 'Noite',
   ANY: 'Qualquer',
 };
+
+function statusBadgeVariant(status: string): 'warning' | 'info' | 'success' {
+  if (status === 'WAITING') return 'warning';
+  if (status === 'NOTIFIED') return 'info';
+  return 'success';
+}
+
+function statusLabel(status: string): string {
+  if (status === 'WAITING') return 'Aguardando';
+  if (status === 'NOTIFIED') return 'Notificado';
+  return 'Convertido';
+}
 
 export default function ListaEsperaPage() {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
@@ -92,49 +105,56 @@ export default function ListaEsperaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Clock className="h-6 w-6 text-blue-500" />
-            Lista de Espera
-          </h1>
-          <p className="text-muted-foreground">
-            Gerencie clientes aguardando horários disponíveis
-          </p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-        >
-          <UserPlus className="h-4 w-4" />
-          Adicionar
-        </button>
-      </div>
+      <PageHeader
+        title="Lista de Espera"
+        description="Gerencie clientes aguardando horários disponíveis"
+        actions={
+          <Button onClick={() => setShowAddModal(true)}>
+            <UserPlus className="h-4 w-4" />
+            Adicionar
+          </Button>
+        }
+      />
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="bg-card rounded-lg border p-4">
-          <p className="text-sm text-muted-foreground">Aguardando</p>
-          <p className="text-2xl font-bold text-yellow-500">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Aguardando</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <Clock className="h-4.5 w-4.5" />
+            </div>
+          </div>
+          <p className="mt-3 text-3xl font-bold text-amber-500">
             {entries.filter(e => e.status === 'WAITING').length}
           </p>
         </div>
-        <div className="bg-card rounded-lg border p-4">
-          <p className="text-sm text-muted-foreground">Notificados</p>
-          <p className="text-2xl font-bold text-blue-500">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Notificados</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <Phone className="h-4.5 w-4.5" />
+            </div>
+          </div>
+          <p className="mt-3 text-3xl font-bold text-blue-500">
             {entries.filter(e => e.status === 'NOTIFIED').length}
           </p>
         </div>
-        <div className="bg-card rounded-lg border p-4">
-          <p className="text-sm text-muted-foreground">Total na Lista</p>
-          <p className="text-2xl font-bold">{entries.length}</p>
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Total na Lista</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <Users className="h-4.5 w-4.5" />
+            </div>
+          </div>
+          <p className="mt-3 text-3xl font-bold">{entries.length}</p>
         </div>
       </div>
 
       {/* Waitlist Table */}
-      <div className="bg-card rounded-lg border overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <table className="w-full">
-          <thead className="bg-muted/50">
+          <thead className="bg-muted">
             <tr>
               <th className="text-left p-4 font-medium">#</th>
               <th className="text-left p-4 font-medium">Cliente</th>
@@ -149,7 +169,7 @@ export default function ListaEsperaPage() {
             {entries.map((entry, index) => {
               const PeriodIcon = periodIcons[entry.desiredPeriod as keyof typeof periodIcons] || Clock;
               return (
-                <tr key={entry.id} className="border-t hover:bg-muted/30">
+                <tr key={entry.id} className="border-t border-border hover:bg-muted/30">
                   <td className="p-4 text-muted-foreground">{index + 1}</td>
                   <td className="p-4">
                     <div>
@@ -181,37 +201,32 @@ export default function ListaEsperaPage() {
                     </div>
                   </td>
                   <td className="p-4">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        entry.status === 'WAITING'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : entry.status === 'NOTIFIED'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-green-100 text-green-700'
-                      }`}
-                    >
-                      {entry.status === 'WAITING' ? 'Aguardando' :
-                       entry.status === 'NOTIFIED' ? 'Notificado' : 'Convertido'}
-                    </span>
+                    <Badge variant={statusBadgeVariant(entry.status)}>
+                      {statusLabel(entry.status)}
+                    </Badge>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       {entry.status === 'WAITING' && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-blue-500"
                           onClick={() => handleNotify(entry.id)}
-                          className="p-2 hover:bg-muted rounded-lg text-blue-500"
                           title="Notificar"
                         >
                           <Phone className="h-4 w-4" />
-                        </button>
+                        </Button>
                       )}
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive"
                         onClick={() => handleRemove(entry.id)}
-                        className="p-2 hover:bg-muted rounded-lg text-red-500"
                         title="Remover"
                       >
                         <X className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

@@ -7,7 +7,6 @@ import {
   TrendingDown,
   Plus,
   Search,
-  Filter,
   ArrowDownRight,
   ArrowUpRight,
   Clock,
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ExportButton } from '@/components/ExportButton';
 import { exportData, ExportFormat } from '@/lib/export';
+import { Button, Card, CardContent, Badge, Modal, Input, Textarea, Select, PageHeader } from '@/components/ui';
 
 interface Product {
   id: string;
@@ -251,84 +251,85 @@ export default function EstoquePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Package className="h-6 w-6 text-blue-500" />
-            Controle de Estoque
-          </h1>
-          <p className="text-muted-foreground">
-            Gerencie produtos, movimentacoes e alertas de estoque
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <ExportButton onExport={handleExport} loading={exporting} />
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Produto
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Controle de Estoque"
+        description="Gerencie produtos, movimentacoes e alertas de estoque"
+        actions={
+          <>
+            <ExportButton onExport={handleExport} loading={exporting} />
+            <Button onClick={() => setShowNewModal(true)}>
+              <Plus className="h-4 w-4" />
+              Novo Produto
+            </Button>
+          </>
+        }
+      />
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Total Produtos</p>
-            <Boxes className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-medium text-muted-foreground">Total Produtos</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <Boxes className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold">{stats?.totalProducts}</p>
+          <p className="mt-3 text-3xl font-bold">{stats?.totalProducts}</p>
           <p className="text-xs text-muted-foreground mt-1">itens cadastrados</p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Estoque Baixo</p>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <span className="text-sm font-medium text-muted-foreground">Estoque Baixo</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive text-destructive-foreground">
+              <AlertTriangle className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-red-500">{stats?.lowStockCount}</p>
+          <p className="mt-3 text-3xl font-bold text-red-600 dark:text-red-400">{stats?.lowStockCount}</p>
           <p className="text-xs text-muted-foreground mt-1">precisam reposicao</p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Valor em Estoque</p>
-            <Package className="h-4 w-4 text-green-500" />
+            <span className="text-sm font-medium text-muted-foreground">Valor em Estoque</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <Package className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(stats?.totalStockValue || 0)}</p>
+          <p className="mt-3 text-3xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(stats?.totalStockValue || 0)}</p>
           <p className="text-xs text-muted-foreground mt-1">custo total</p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Compras (Mes)</p>
-            <ArrowUpRight className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-medium text-muted-foreground">Compras (Mes)</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <ArrowUpRight className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-blue-600">{formatCurrency(stats?.monthlyPurchases || 0)}</p>
+          <p className="mt-3 text-3xl font-bold text-cyan-600 dark:text-cyan-400">{formatCurrency(stats?.monthlyPurchases || 0)}</p>
           <p className="text-xs text-muted-foreground mt-1">investido</p>
         </div>
 
-        <div className="bg-card rounded-lg border p-4">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Consumo (Mes)</p>
-            <TrendingDown className="h-4 w-4 text-orange-500" />
+            <span className="text-sm font-medium text-muted-foreground">Consumo (Mes)</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <TrendingDown className="h-4.5 w-4.5" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-orange-600">{formatCurrency(stats?.monthlyUsage || 0)}</p>
+          <p className="mt-3 text-3xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(stats?.monthlyUsage || 0)}</p>
           <p className="text-xs text-muted-foreground mt-1">utilizado</p>
         </div>
       </div>
 
       {/* Alerts */}
       {stats && stats.lowStockCount > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3 dark:border-red-500/20 dark:bg-red-500/10">
+          <AlertTriangle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5" />
           <div>
-            <p className="font-medium text-red-800">Atencao: Produtos com Estoque Baixo</p>
-            <p className="text-sm text-red-600">
+            <p className="font-medium text-red-800 dark:text-red-400">Atencao: Produtos com Estoque Baixo</p>
+            <p className="text-sm text-red-600 dark:text-red-400/80">
               {stats.lowStockCount} produtos estao abaixo do nivel minimo e precisam de reposicao.
             </p>
           </div>
@@ -337,317 +338,261 @@ export default function EstoquePage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Products List */}
-        <div className="lg:col-span-2 bg-card rounded-lg border p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Produtos</h2>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Buscar..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 pr-4 py-2 border rounded-lg text-sm w-48"
-                />
+        <Card className="lg:col-span-2">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <h2 className="text-lg font-semibold">Produtos</h2>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Buscar..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-11 w-48 rounded-xl border border-input bg-background pl-9 pr-4 text-sm transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                  />
+                </div>
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="h-11 rounded-xl border border-input bg-background px-3 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                >
+                  <option value="all">Todos</option>
+                  <option value="low">Estoque Baixo</option>
+                  <option value="INTERNAL_USE">Uso Interno</option>
+                  <option value="FOR_SALE">Revenda</option>
+                </select>
               </div>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="px-3 py-2 border rounded-lg text-sm"
-              >
-                <option value="all">Todos</option>
-                <option value="low">Estoque Baixo</option>
-                <option value="INTERNAL_USE">Uso Interno</option>
-                <option value="FOR_SALE">Revenda</option>
-              </select>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                onClick={() => handleProductClick(product)}
-                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors hover:opacity-80 ${
-                  isLowStock(product) ? 'bg-red-50 border border-red-200' : 'bg-muted/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${isLowStock(product) ? 'bg-red-100' : 'bg-blue-100'}`}>
-                    <Package className={`h-5 w-5 ${isLowStock(product) ? 'text-red-600' : 'text-blue-600'}`} />
+            <div className="space-y-2">
+              {filteredProducts.map((product) => (
+                <div
+                  key={product.id}
+                  onClick={() => handleProductClick(product)}
+                  className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors hover:opacity-80 ${
+                    isLowStock(product) ? 'bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/20' : 'bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${isLowStock(product) ? 'bg-red-100 dark:bg-red-500/15' : 'bg-gradient-brand'}`}>
+                      <Package className={`h-5 w-5 ${isLowStock(product) ? 'text-red-600 dark:text-red-400' : 'text-white'}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">{product.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {product.brand} - {product.sku}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {product.brand} - {product.sku}
-                    </p>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <p className={`font-bold ${isLowStock(product) ? 'text-red-600 dark:text-red-400' : ''}`}>
+                        {product.currentStock} {product.unit}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Min: {product.minStock} | {formatCurrency(product.costPrice)}
+                      </p>
+                    </div>
+                    {isLowStock(product) && <Badge variant="destructive">Baixo</Badge>}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className={`font-bold ${isLowStock(product) ? 'text-red-600' : ''}`}>
-                    {product.currentStock} {product.unit}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Min: {product.minStock} | {formatCurrency(product.costPrice)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Recent Movements */}
-        <div className="bg-card rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Movimentacoes Recentes
-          </h2>
-          <div className="space-y-3">
-            {movements.map((movement) => (
-              <div key={movement.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                <div className={`p-2 rounded-lg ${movement.quantity > 0 ? 'bg-green-100' : 'bg-orange-100'}`}>
-                  {movement.quantity > 0 ? (
-                    <ArrowUpRight className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <ArrowDownRight className="h-4 w-4 text-orange-600" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{movement.product.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {movementTypeLabels[movement.type]} por {movement.user?.name}
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Movimentacoes Recentes
+            </h2>
+            <div className="space-y-3">
+              {movements.map((movement) => (
+                <div key={movement.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                  <div className={`p-2 rounded-xl ${movement.quantity > 0 ? 'bg-emerald-100 dark:bg-emerald-500/15' : 'bg-amber-100 dark:bg-amber-500/15'}`}>
+                    {movement.quantity > 0 ? (
+                      <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <ArrowDownRight className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{movement.product.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {movementTypeLabels[movement.type]} por {movement.user?.name}
+                    </p>
+                  </div>
+                  <p className={`font-bold text-sm ${movement.quantity > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {movement.quantity > 0 ? '+' : ''}{movement.quantity}
                   </p>
                 </div>
-                <p className={`font-bold text-sm ${movement.quantity > 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                  {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <button className="w-full mt-4 p-2 text-sm text-primary hover:bg-muted rounded-lg transition-colors">
-            Ver todas movimentacoes
-          </button>
-        </div>
+            <button className="w-full mt-4 p-2 text-sm text-primary hover:bg-muted rounded-xl transition-colors">
+              Ver todas movimentacoes
+            </button>
+          </CardContent>
+        </Card>
       </div>
 
       {/* New Product Modal */}
-      {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Novo Produto</h2>
-            <form onSubmit={handleSubmitNewProduct} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nome do produto *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Shampoo Profissional 1L"
-                  required
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Marca</label>
-                  <input
-                    type="text"
-                    value={formData.brand}
-                    onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))}
-                    placeholder="Ex: LOreal"
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">SKU</label>
-                  <input
-                    type="text"
-                    value={formData.sku}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                    placeholder="Codigo interno"
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Categoria</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="INTERNAL_USE">Uso Interno</option>
-                  <option value="FOR_SALE">Revenda</option>
-                  <option value="BOTH">Ambos</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Preco de Custo (R$) *</label>
-                  <input
-                    type="number"
-                    value={formData.costPrice || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, costPrice: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    required
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Unidade</label>
-                  <select
-                    value={formData.unit}
-                    onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  >
-                    <option value="un">Unidade</option>
-                    <option value="ml">Mililitros</option>
-                    <option value="g">Gramas</option>
-                    <option value="kg">Quilogramas</option>
-                    <option value="L">Litros</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Estoque Inicial</label>
-                  <input
-                    type="number"
-                    value={formData.initialStock || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, initialStock: parseInt(e.target.value) || 0 }))}
-                    placeholder="0"
-                    min="0"
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Estoque Minimo</label>
-                  <input
-                    type="number"
-                    value={formData.minStock || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, minStock: parseInt(e.target.value) || 0 }))}
-                    placeholder="0"
-                    min="0"
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModals}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border text-muted-foreground rounded-lg hover:bg-muted"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {saving ? 'Salvando...' : 'Criar Produto'}
-                </button>
-              </div>
-            </form>
+      <Modal open={showNewModal} onClose={handleCloseModals} title="Novo Produto">
+        <form onSubmit={handleSubmitNewProduct} className="space-y-4">
+          <Input
+            label="Nome do produto *"
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Ex: Shampoo Profissional 1L"
+            required
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Marca"
+              type="text"
+              value={formData.brand}
+              onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))}
+              placeholder="Ex: LOreal"
+            />
+            <Input
+              label="SKU"
+              type="text"
+              value={formData.sku}
+              onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
+              placeholder="Codigo interno"
+            />
           </div>
-        </div>
-      )}
+          <Select
+            label="Categoria"
+            value={formData.category}
+            onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+          >
+            <option value="INTERNAL_USE">Uso Interno</option>
+            <option value="FOR_SALE">Revenda</option>
+            <option value="BOTH">Ambos</option>
+          </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Preco de Custo (R$) *"
+              type="number"
+              value={formData.costPrice || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, costPrice: parseFloat(e.target.value) || 0 }))}
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              required
+            />
+            <Select
+              label="Unidade"
+              value={formData.unit}
+              onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+            >
+              <option value="un">Unidade</option>
+              <option value="ml">Mililitros</option>
+              <option value="g">Gramas</option>
+              <option value="kg">Quilogramas</option>
+              <option value="L">Litros</option>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Estoque Inicial"
+              type="number"
+              value={formData.initialStock || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, initialStock: parseInt(e.target.value) || 0 }))}
+              placeholder="0"
+              min="0"
+            />
+            <Input
+              label="Estoque Minimo"
+              type="number"
+              value={formData.minStock || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, minStock: parseInt(e.target.value) || 0 }))}
+              placeholder="0"
+              min="0"
+            />
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button type="button" variant="outline" onClick={handleCloseModals} disabled={saving} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving} loading={saving} className="flex-1">
+              {saving ? 'Salvando...' : 'Criar Produto'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Stock Movement Modal */}
-      {showMovementModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h2 className="text-xl font-bold">Movimentacao de Estoque</h2>
-                <p className="text-sm text-muted-foreground">{selectedProduct.name}</p>
-              </div>
-              <button onClick={handleCloseModals} className="text-muted-foreground hover:text-foreground">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {selectedProduct && (
+        <Modal
+          open={showMovementModal}
+          onClose={handleCloseModals}
+          title="Movimentacao de Estoque"
+          description={selectedProduct.name}
+        >
+          <div className="mb-4 p-3 bg-muted/50 rounded-xl">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Estoque Atual:</span>
+              <span className="font-bold">{selectedProduct.currentStock} {selectedProduct.unit}</span>
             </div>
-
-            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Estoque Atual:</span>
-                <span className="font-bold">{selectedProduct.currentStock} {selectedProduct.unit}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Estoque Minimo:</span>
-                <span>{selectedProduct.minStock} {selectedProduct.unit}</span>
-              </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Estoque Minimo:</span>
+              <span>{selectedProduct.minStock} {selectedProduct.unit}</span>
             </div>
-
-            <form onSubmit={handleSubmitMovement} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Tipo de Movimentacao</label>
-                <select
-                  value={movementData.type}
-                  onChange={(e) => setMovementData(prev => ({ ...prev, type: e.target.value }))}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="PURCHASE">Compra (Entrada)</option>
-                  <option value="SERVICE_USE">Uso em Servico (Saida)</option>
-                  <option value="SALE">Venda (Saida)</option>
-                  <option value="ADJUSTMENT">Ajuste</option>
-                  <option value="LOSS">Perda (Saida)</option>
-                  <option value="RETURN">Devolucao (Entrada)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Quantidade *</label>
-                <input
-                  type="number"
-                  value={movementData.quantity || ''}
-                  onChange={(e) => setMovementData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
-                  placeholder="0"
-                  min="1"
-                  required
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {['PURCHASE', 'RETURN'].includes(movementData.type)
-                    ? 'Quantidade a adicionar ao estoque'
-                    : 'Quantidade a remover do estoque'}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Observacoes</label>
-                <textarea
-                  value={movementData.notes}
-                  onChange={(e) => setMovementData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Motivo ou detalhes da movimentacao..."
-                  rows={2}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModals}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border text-muted-foreground rounded-lg hover:bg-muted"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {saving ? 'Salvando...' : 'Registrar'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
+
+          <form onSubmit={handleSubmitMovement} className="space-y-4">
+            <Select
+              label="Tipo de Movimentacao"
+              value={movementData.type}
+              onChange={(e) => setMovementData(prev => ({ ...prev, type: e.target.value }))}
+            >
+              <option value="PURCHASE">Compra (Entrada)</option>
+              <option value="SERVICE_USE">Uso em Servico (Saida)</option>
+              <option value="SALE">Venda (Saida)</option>
+              <option value="ADJUSTMENT">Ajuste</option>
+              <option value="LOSS">Perda (Saida)</option>
+              <option value="RETURN">Devolucao (Entrada)</option>
+            </Select>
+            <div>
+              <Input
+                label="Quantidade *"
+                type="number"
+                value={movementData.quantity || ''}
+                onChange={(e) => setMovementData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                placeholder="0"
+                min="1"
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {['PURCHASE', 'RETURN'].includes(movementData.type)
+                  ? 'Quantidade a adicionar ao estoque'
+                  : 'Quantidade a remover do estoque'}
+              </p>
+            </div>
+            <Textarea
+              label="Observacoes"
+              value={movementData.notes}
+              onChange={(e) => setMovementData(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Motivo ou detalhes da movimentacao..."
+              rows={2}
+            />
+            <div className="flex gap-4 pt-4">
+              <Button type="button" variant="outline" onClick={handleCloseModals} disabled={saving} className="flex-1">
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving} loading={saving} className="flex-1">
+                {saving ? 'Salvando...' : 'Registrar'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

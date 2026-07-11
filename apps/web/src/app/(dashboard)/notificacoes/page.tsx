@@ -13,6 +13,7 @@ import {
   Filter,
   RefreshCw,
 } from 'lucide-react';
+import { PageHeader, Button, Badge, Select } from '@/components/ui';
 
 // Mock data - will be replaced with API calls
 const mockNotificationStats = {
@@ -109,15 +110,15 @@ const mockScheduledNotifications = [
 function getStatusIcon(status: string) {
   switch (status) {
     case 'read':
-      return <CheckCircle className="w-4 h-4 text-green-500" />;
+      return <CheckCircle className="w-4 h-4 text-emerald-500" />;
     case 'delivered':
       return <CheckCircle className="w-4 h-4 text-blue-500" />;
     case 'sent':
-      return <Send className="w-4 h-4 text-gray-400" />;
+      return <Send className="w-4 h-4 text-muted-foreground" />;
     case 'failed':
-      return <AlertCircle className="w-4 h-4 text-red-500" />;
+      return <AlertCircle className="w-4 h-4 text-destructive" />;
     default:
-      return <Clock className="w-4 h-4 text-gray-400" />;
+      return <Clock className="w-4 h-4 text-muted-foreground" />;
   }
 }
 
@@ -136,20 +137,28 @@ function getStatusLabel(status: string) {
   }
 }
 
-function getTypeLabel(type: string) {
+function getTypeBadge(type: string) {
   switch (type) {
     case 'reminder':
-      return { label: 'Lembrete', color: 'bg-purple-100 text-purple-700' };
+      return { label: 'Lembrete', variant: 'default' as const, className: '' };
     case 'confirmation':
-      return { label: 'Confirmacao', color: 'bg-green-100 text-green-700' };
+      return { label: 'Confirmacao', variant: 'success' as const, className: '' };
     case 'birthday':
-      return { label: 'Aniversario', color: 'bg-pink-100 text-pink-700' };
+      return {
+        label: 'Aniversario',
+        variant: 'default' as const,
+        className: 'bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-400',
+      };
     case 'reactivation':
-      return { label: 'Reativacao', color: 'bg-orange-100 text-orange-700' };
+      return {
+        label: 'Reativacao',
+        variant: 'default' as const,
+        className: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400',
+      };
     case 'confirmation_request':
-      return { label: 'Pedir Confirmacao', color: 'bg-blue-100 text-blue-700' };
+      return { label: 'Pedir Confirmacao', variant: 'info' as const, className: '' };
     default:
-      return { label: 'Mensagem', color: 'bg-gray-100 text-gray-700' };
+      return { label: 'Mensagem', variant: 'outline' as const, className: '' };
   }
 }
 
@@ -181,109 +190,109 @@ export default function NotificacoesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Notificacoes</h1>
-          <p className="text-gray-600">Acompanhe os lembretes e mensagens automaticas</p>
-        </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-          <RefreshCw className="w-4 h-4" />
-          Atualizar
-        </button>
-      </div>
+      <PageHeader
+        title="Notificacoes"
+        description="Acompanhe os lembretes e mensagens automaticas"
+        actions={
+          <Button variant="primary">
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </Button>
+        }
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-500">Lembretes Hoje</span>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Bell className="w-5 h-5 text-purple-600" />
+            <span className="text-sm font-medium text-muted-foreground">Lembretes Hoje</span>
+            <div className="w-10 h-10 bg-gradient-brand text-white rounded-xl flex items-center justify-center">
+              <Bell className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-gray-800 mt-4">{stats.todayReminders}</p>
-          <p className="text-sm text-gray-500 mt-1">mensagens enviadas</p>
+          <p className="text-3xl font-bold text-foreground mt-4">{stats.todayReminders}</p>
+          <p className="text-sm text-muted-foreground mt-1">mensagens enviadas</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-500">Confirmacoes</span>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-green-600" />
+            <span className="text-sm font-medium text-muted-foreground">Confirmacoes</span>
+            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-500/15 rounded-xl flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-gray-800 mt-4">{stats.todayConfirmations}</p>
-          <p className="text-sm text-gray-500 mt-1">clientes confirmaram</p>
+          <p className="text-3xl font-bold text-foreground mt-4">{stats.todayConfirmations}</p>
+          <p className="text-sm text-muted-foreground mt-1">clientes confirmaram</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-500">Taxa de Entrega</span>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Send className="w-5 h-5 text-blue-600" />
+            <span className="text-sm font-medium text-muted-foreground">Taxa de Entrega</span>
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/15 rounded-xl flex items-center justify-center">
+              <Send className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-gray-800 mt-4">{stats.deliveredRate}%</p>
-          <p className="text-sm text-gray-500 mt-1">mensagens entregues</p>
+          <p className="text-3xl font-bold text-foreground mt-4">{stats.deliveredRate}%</p>
+          <p className="text-sm text-muted-foreground mt-1">mensagens entregues</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-500">Taxa de Leitura</span>
-            <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-pink-600" />
+            <span className="text-sm font-medium text-muted-foreground">Taxa de Leitura</span>
+            <div className="w-10 h-10 bg-gold/15 rounded-xl flex items-center justify-center">
+              <MessageSquare className="w-5 h-5 text-gold-foreground dark:text-gold" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-gray-800 mt-4">{stats.readRate}%</p>
-          <p className="text-sm text-gray-500 mt-1">mensagens lidas</p>
+          <p className="text-3xl font-bold text-foreground mt-4">{stats.readRate}%</p>
+          <p className="text-sm text-muted-foreground mt-1">mensagens lidas</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Messages */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
+        <div className="lg:col-span-2 rounded-2xl border border-border bg-card shadow-sm">
+          <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-800">Mensagens Recentes</h2>
+              <h2 className="text-lg font-semibold text-foreground">Mensagens Recentes</h2>
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <select
+                <Filter className="w-4 h-4 text-muted-foreground" />
+                <Select
                   value={filter}
                   onChange={(e) => setFilter(e.target.value as any)}
-                  className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="h-9 text-sm px-3"
                 >
                   <option value="all">Todas</option>
                   <option value="reminder">Lembretes</option>
                   <option value="confirmation">Confirmacoes</option>
                   <option value="birthday">Aniversarios</option>
                   <option value="reactivation">Reativacao</option>
-                </select>
+                </Select>
               </div>
             </div>
           </div>
-          <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+          <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
             {filteredMessages.map((message) => {
-              const typeInfo = getTypeLabel(message.type);
+              const typeInfo = getTypeBadge(message.type);
               return (
-                <div key={message.id} className="p-4 hover:bg-gray-50 transition-colors">
+                <div key={message.id} className="p-4 hover:bg-muted/50 transition-colors">
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-medium shrink-0">
+                    <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-accent-foreground font-medium shrink-0">
                       {message.clientName.split(' ').map(n => n[0]).join('')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-gray-800">{message.clientName}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeInfo.color}`}>
+                        <span className="font-medium text-foreground">{message.clientName}</span>
+                        <Badge variant={typeInfo.variant} className={typeInfo.className}>
                           {typeInfo.label}
-                        </span>
+                        </Badge>
                       </div>
-                      <p className="text-sm text-gray-600 line-clamp-2">{message.content}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{message.content}</p>
                       <div className="flex items-center gap-4 mt-2">
-                        <span className="text-xs text-gray-400">{formatDateTime(message.createdAt)}</span>
+                        <span className="text-xs text-muted-foreground/70">{formatDateTime(message.createdAt)}</span>
                         <div className="flex items-center gap-1">
                           {getStatusIcon(message.status)}
                           <span className={`text-xs ${
-                            message.status === 'failed' ? 'text-red-500' : 'text-gray-500'
+                            message.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'
                           }`}>
                             {getStatusLabel(message.status)}
                           </span>
@@ -298,33 +307,33 @@ export default function NotificacoesPage() {
         </div>
 
         {/* Scheduled Notifications */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-800">Proximos Envios</h2>
-            <p className="text-sm text-gray-500">Notificacoes agendadas</p>
+        <div className="rounded-2xl border border-border bg-card shadow-sm">
+          <div className="p-4 border-b border-border">
+            <h2 className="text-lg font-semibold text-foreground">Proximos Envios</h2>
+            <p className="text-sm text-muted-foreground">Notificacoes agendadas</p>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border">
             {mockScheduledNotifications.map((notification) => {
-              const typeInfo = getTypeLabel(notification.type);
+              const typeInfo = getTypeBadge(notification.type);
               return (
                 <div key={notification.id} className="p-4">
                   <div className="flex items-center gap-3 mb-2">
-                    <Clock className="w-4 h-4 text-purple-500" />
-                    <span className="text-sm font-medium text-purple-600">
+                    <Clock className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">
                       {formatTime(notification.scheduledFor)}
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeInfo.color}`}>
+                    <Badge variant={typeInfo.variant} className={typeInfo.className}>
                       {typeInfo.label}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="ml-7">
                     <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-800">{notification.clientName}</span>
+                      <User className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">{notification.clientName}</span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
                         {notification.service} - {formatDateTime(notification.appointmentTime)}
                       </span>
                     </div>
@@ -333,8 +342,8 @@ export default function NotificacoesPage() {
               );
             })}
           </div>
-          <div className="p-4 border-t border-gray-200">
-            <p className="text-sm text-gray-500 text-center">
+          <div className="p-4 border-t border-border">
+            <p className="text-sm text-muted-foreground text-center">
               Lembretes sao enviados automaticamente 24h e 2h antes do horario agendado
             </p>
           </div>

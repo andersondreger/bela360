@@ -1,19 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import type { UserRole } from '@prisma/client';
 import { env } from '../../config';
 import { AuthenticationError } from '../errors';
-import type { JWTPayload } from '@bela360/shared';
 
-// Extend Express Request type
-declare global {
-  namespace Express {
-    interface Request {
-      business?: {
-        id: string;
-        phone: string;
-      };
-    }
-  }
+interface AccessTokenPayload {
+  userId: string;
+  businessId: string;
+  role: UserRole;
 }
 
 export function authMiddleware(
@@ -40,11 +34,12 @@ export function authMiddleware(
       throw new AuthenticationError('Token mal formatado');
     }
 
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, env.JWT_SECRET) as AccessTokenPayload;
 
-    req.business = {
-      id: decoded.businessId,
-      phone: decoded.phone,
+    req.user = {
+      userId: decoded.userId,
+      businessId: decoded.businessId,
+      role: decoded.role,
     };
 
     next();

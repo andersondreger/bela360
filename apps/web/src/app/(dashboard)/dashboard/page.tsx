@@ -18,6 +18,7 @@ import {
   Legend,
 } from 'recharts';
 import {
+  api,
   analyticsApi,
   DashboardStats,
   RevenueReport,
@@ -54,7 +55,7 @@ interface TodayAppointment {
   status: string;
 }
 
-const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+const CHART_COLORS = ['#8B2FE0', '#EC4899', '#F0B429', '#06b6d4', '#10b981', '#F0439C'];
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
@@ -99,14 +100,14 @@ function StatCard({
 }) {
   if (loading) {
     return (
-      <div className="rounded-lg border bg-card p-6 shadow-sm animate-pulse">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm animate-pulse">
         <div className="flex items-center justify-between">
-          <div className="h-4 bg-gray-200 rounded w-24"></div>
-          <div className="h-5 w-5 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-muted rounded w-24"></div>
+          <div className="h-9 w-9 bg-muted rounded-xl"></div>
         </div>
-        <div className="mt-2">
-          <div className="h-8 bg-gray-200 rounded w-16 mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-20"></div>
+        <div className="mt-3">
+          <div className="h-8 bg-muted rounded w-16 mb-2"></div>
+          <div className="h-3 bg-muted rounded w-20"></div>
         </div>
       </div>
     );
@@ -114,18 +115,20 @@ function StatCard({
 
   const changeColor =
     changeType === 'positive'
-      ? 'text-green-600'
+      ? 'text-emerald-600 dark:text-emerald-400'
       : changeType === 'negative'
-        ? 'text-red-600'
-        : 'text-gray-500';
+        ? 'text-red-600 dark:text-red-400'
+        : 'text-muted-foreground';
 
   return (
-    <div className="rounded-lg border bg-card p-6 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-muted-foreground">{name}</span>
-        <Icon className="h-5 w-5 text-muted-foreground" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white">
+          <Icon className="h-4.5 w-4.5" />
+        </div>
       </div>
-      <div className="mt-2">
+      <div className="mt-3">
         <span className="text-3xl font-bold">{value}</span>
         {change && <p className={`text-xs mt-1 ${changeColor}`}>{change}</p>}
       </div>
@@ -146,15 +149,15 @@ function ChartCard({
 }) {
   if (loading) {
     return (
-      <div className="rounded-lg border bg-card shadow-sm p-6">
-        <div className="h-5 bg-gray-200 rounded w-32 mb-4"></div>
-        <div className="h-64 bg-gray-100 rounded animate-pulse"></div>
+      <div className="rounded-2xl border border-border bg-card shadow-sm p-6">
+        <div className="h-5 bg-muted rounded w-32 mb-4"></div>
+        <div className="h-64 bg-muted rounded-xl animate-pulse"></div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border bg-card shadow-sm p-6">
+    <div className="rounded-2xl border border-border bg-card shadow-sm p-6 transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">{title}</h3>
         {actions}
@@ -196,10 +199,7 @@ export default function DashboardPage() {
           analyticsApi.getRevenueReport(startDate, endDate).catch(() => null),
           analyticsApi.getServiceReport(monthStart, endDate).catch(() => null),
           analyticsApi.getProfessionalReport(monthStart, endDate).catch(() => null),
-          fetch('/api/appointments/today', { credentials: 'include' })
-            .then(res => res.json())
-            .then(json => json.data || [])
-            .catch(() => []),
+          api.get<TodayAppointment[]>('/appointments/today').catch(() => []),
         ]);
 
         setStats(dashboardStats);
@@ -283,15 +283,15 @@ export default function DashboardPage() {
             Bem-vindo ao bela360. Aqui está o resumo do seu dia.
           </p>
         </div>
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-          <div className="flex items-center gap-2 text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 dark:border-red-500/20 dark:bg-red-500/10">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
             <AlertCircle className="h-5 w-5" />
             <span className="font-medium">Erro ao carregar dados</span>
           </div>
-          <p className="mt-2 text-sm text-red-600">{error}</p>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400/80">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded-md text-sm font-medium hover:bg-red-200"
+            className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded-xl text-sm font-medium hover:bg-red-200 dark:bg-red-500/15 dark:text-red-400"
           >
             Tentar novamente
           </button>
@@ -419,9 +419,9 @@ export default function DashboardPage() {
                 <Line
                   type="monotone"
                   dataKey="receita"
-                  stroke="#8b5cf6"
-                  strokeWidth={2}
-                  dot={{ fill: '#8b5cf6' }}
+                  stroke="#8B2FE0"
+                  strokeWidth={2.5}
+                  dot={{ fill: '#8B2FE0' }}
                   name="Receita"
                 />
               </LineChart>
@@ -500,8 +500,8 @@ export default function DashboardPage() {
                 }
               />
               <Legend />
-              <Bar dataKey="agendamentos" fill="#8b5cf6" name="Agendamentos" />
-              <Bar dataKey="receita" fill="#06b6d4" name="Receita (R$)" />
+              <Bar dataKey="agendamentos" fill="#8B2FE0" radius={[0, 6, 6, 0]} name="Agendamentos" />
+              <Bar dataKey="receita" fill="#F0B429" radius={[0, 6, 6, 0]} name="Receita (R$)" />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -512,8 +512,8 @@ export default function DashboardPage() {
       </ChartCard>
 
       {/* Upcoming Appointments */}
-      <div className="rounded-lg border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+      <div className="rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-lg font-semibold">Próximos Agendamentos de Hoje</h2>
           {todayAppointments.length > 0 && (
             <SimpleExportButton format="xlsx" label="Excel" onExport={handleExportAppointments} />
@@ -526,15 +526,15 @@ export default function DashboardPage() {
               .map((_, i) => (
                 <div key={i} className="flex items-center justify-between px-6 py-4 animate-pulse">
                   <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 bg-gray-200 rounded-full"></div>
+                    <div className="h-10 w-10 bg-muted rounded-full"></div>
                     <div>
-                      <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-32"></div>
+                      <div className="h-4 bg-muted rounded w-24 mb-2"></div>
+                      <div className="h-3 bg-muted rounded w-32"></div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="h-4 bg-gray-200 rounded w-12"></div>
-                    <div className="h-6 bg-gray-200 rounded w-20"></div>
+                    <div className="h-4 bg-muted rounded w-12"></div>
+                    <div className="h-6 bg-muted rounded w-20"></div>
                   </div>
                 </div>
               ))}
