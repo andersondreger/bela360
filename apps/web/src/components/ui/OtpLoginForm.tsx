@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { motion } from 'framer-motion';
-import { KeyRound, Phone } from 'lucide-react';
+import { KeyRound, Lock, Phone } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -26,11 +26,36 @@ function formatPhone(value: string) {
 }
 
 export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
+  const [mode, setMode] = useState<'otp' | 'password'>('otp');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const handlePasswordLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.replace(/\D/g, ''), password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error?.message || 'Telefone ou senha inválidos');
+
+      await onVerified(data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Telefone ou senha inválidos');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRequestOTP = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,6 +103,54 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
     }
   };
 
+  if (mode === 'password') {
+    return (
+      <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }}>
+        <form onSubmit={handlePasswordLogin} className="space-y-4">
+          <Input
+            label="Telefone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(formatPhone(e.target.value))}
+            placeholder="(11) 99999-9999"
+            maxLength={15}
+            required
+            autoFocus
+          />
+          <Input
+            label="Senha"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            loading={loading}
+            disabled={phone.replace(/\D/g, '').length < 10 || password.length < 6}
+          >
+            <Lock className="h-4 w-4" />
+            Entrar
+          </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('otp');
+              setError('');
+            }}
+            className="w-full text-center text-sm font-medium text-primary hover:underline"
+          >
+            Entrar com código do WhatsApp
+          </button>
+        </form>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div key={step} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }}>
       {step === 'phone' ? (
@@ -103,6 +176,16 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
             <Phone className="h-4 w-4" />
             Enviar código
           </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('password');
+              setError('');
+            }}
+            className="w-full text-center text-sm font-medium text-primary hover:underline"
+          >
+            Entrar com senha
+          </button>
         </form>
       ) : (
         <form onSubmit={handleVerifyOTP} className="space-y-4">

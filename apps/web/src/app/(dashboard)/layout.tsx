@@ -51,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchCurrentUser().then((current) => {
       if (!active) return;
       if (!current) {
-        router.replace('/');
+        router.replace('/login');
         return;
       }
       setUser(current);

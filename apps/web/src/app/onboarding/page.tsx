@@ -110,7 +110,7 @@ export default function OnboardingPage() {
                 </span>
                 . Use esse número para entrar na sua conta.
               </p>
-              <Button className="mt-6 w-full" size="lg" onClick={() => (window.location.href = '/')}>
+              <Button className="mt-6 w-full" size="lg" onClick={() => (window.location.href = '/login')}>
                 Ir para o login
               </Button>
             </div>
@@ -199,7 +199,7 @@ export default function OnboardingPage() {
         {!done && (
           <p className="relative mt-6 text-center text-sm text-white/70">
             Já tem uma conta?{' '}
-            <a href="/" className="font-semibold text-white hover:underline">
+            <a href="/login" className="font-semibold text-white hover:underline">
               Entrar
             </a>
           </p>

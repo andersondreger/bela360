@@ -3,24 +3,26 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { UserCircle2 } from 'lucide-react';
-import { AuroraBackground, OtpLoginForm } from '@/components/ui';
-import { fetchCurrentUser } from '@/lib/auth';
+import { Sparkles } from 'lucide-react';
+import { AuroraBackground, Logo, OtpLoginForm } from '@/components/ui';
+import { fetchCurrentUser, getStoredRole, homePathForRole } from '@/lib/auth';
 
-export default function ProfessionalLoginPage() {
+export default function LoginPage() {
   const router = useRouter();
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
     let active = true;
+
     fetchCurrentUser().then((user) => {
       if (!active) return;
-      if (user && user.role === 'PROFESSIONAL') {
-        router.replace('/profissional/meu-painel');
+      if (user) {
+        router.replace(homePathForRole(getStoredRole() ?? user.role));
       } else {
         setCheckingSession(false);
       }
     });
+
     return () => {
       active = false;
     };
@@ -46,37 +48,39 @@ export default function ProfessionalLoginPage() {
         className="relative w-full max-w-md"
       >
         <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
-            <UserCircle2 className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="mb-1 text-2xl font-bold text-white">Área do Profissional</h1>
-          <p className="text-sm text-white/70">Acesse sua agenda e comissões</p>
+          <a href="/" className="mb-4 flex justify-center">
+            <Logo wordmarkClassName="text-white bg-none text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
+          </a>
+          <p className="flex items-center justify-center gap-1.5 text-sm text-white/70">
+            <Sparkles className="h-3.5 w-3.5 text-bela-gold" />
+            Automação inteligente para o seu salão
+          </p>
         </div>
 
         <div className="glass-dark noise-overlay rounded-3xl p-8 shadow-2xl">
-          <h2 className="mb-6 text-xl font-semibold text-white">Entrar como profissional</h2>
+          <h2 className="mb-6 text-xl font-semibold text-white">Entrar na sua conta</h2>
           <OtpLoginForm
             onVerified={(data) => {
-              if (data.user.role !== 'PROFESSIONAL') {
-                throw new Error('Esta área é exclusiva para profissionais');
-              }
               localStorage.setItem('accessToken', data.accessToken);
               localStorage.setItem('refreshToken', data.refreshToken);
               localStorage.setItem('userRole', data.user.role);
-              router.push('/profissional/meu-painel');
+              router.push(homePathForRole(data.user.role));
             }}
           />
         </div>
 
-        <div className="relative mt-8 space-y-3 text-center">
-          <p className="text-sm text-white/70">
-            É dono do negócio?{' '}
-            <a href="/login" className="font-semibold text-white hover:underline">
-              Acesse aqui
-            </a>
-          </p>
-          <p className="text-xs text-white/40">Seu acesso deve ser criado pelo administrador do salão</p>
-        </div>
+        <p className="relative mt-8 text-center text-sm text-white/70">
+          Novo por aqui?{' '}
+          <a href="/onboarding" className="font-semibold text-white hover:underline">
+            Cadastre seu salão
+          </a>
+        </p>
+        <p className="relative mt-2 text-center text-xs text-white/50">
+          É um profissional?{' '}
+          <a href="/profissional" className="font-medium text-white/80 hover:underline">
+            Entrar como profissional
+          </a>
+        </p>
       </motion.div>
     </main>
   );

@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { prisma, redis, logger, env } from '../../config';
 import { getSystemWhatsAppService } from '../whatsapp/whatsapp.service';
 import { AppError } from '../../common/errors';
+import { verifyPassword } from '../../common/password';
 
 interface TokenPayload {
   userId: string;
@@ -161,6 +162,57 @@ export class AuthService {
     );
 
     logger.info({ userId: user.id }, 'User logged in successfully');
+
+    return tokens;
+  }
+
+  /**
+   * Login with phone + password (fallback that does not depend on WhatsApp delivery)
+   */
+  async loginWithPassword(phone: string, password: string): Promise<AuthTokens> {
+    const normalizedPhone = phone.replace(/\D/g, '');
+
+    const lockKey = `password:locked:${normalizedPhone}`;
+    if (await redis.get(lockKey)) {
+      throw new AppError('Muitas tentativas. Tente novamente em 15 minutos.', 429);
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { phone: normalizedPhone },
+    });
+
+    if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+      const attemptsKey = `password:attempts:${normalizedPhone}`;
+      const attempts = await redis.incr(attemptsKey);
+      await redis.expire(attemptsKey, 300);
+
+      if (attempts >= 5) {
+        await redis.setex(lockKey, 900, '1');
+      }
+
+      throw new AppError('Telefone ou senha inválidos', 401);
+    }
+
+    if (!user.isActive) {
+      throw new AppError('Usuário inativo', 401);
+    }
+
+    await redis.del(`password:attempts:${normalizedPhone}`);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    const tokens = this.generateTokens({
+      userId: user.id,
+      businessId: user.businessId,
+      role: user.role,
+    });
+
+    await redis.setex(`refresh:${user.id}`, 7 * 24 * 60 * 60, tokens.refreshToken);
+
+    logger.info({ userId: user.id }, 'User logged in successfully via password');
 
     return tokens;
   }

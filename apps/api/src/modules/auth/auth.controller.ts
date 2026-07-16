@@ -13,6 +13,11 @@ const verifyOTPSchema = z.object({
   otp: z.string().length(6),
 });
 
+const loginSchema = z.object({
+  phone: z.string().min(10).max(15),
+  password: z.string().min(6),
+});
+
 const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
@@ -49,6 +54,51 @@ export class AuthController {
       const tokens = await authService.verifyOTP(phone, otp);
 
       // Get user info
+      const user = await prisma.user.findFirst({
+        where: { phone: phone.replace(/\D/g, '') },
+        include: {
+          business: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              type: true,
+              whatsappConnected: true,
+            },
+          },
+        },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
+          user: {
+            id: user!.id,
+            name: user!.name,
+            phone: user!.phone,
+            email: user!.email,
+            role: user!.role,
+          },
+          business: user!.business,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Login with phone + password (fallback that doesn't depend on WhatsApp OTP delivery)
+   */
+  async login(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { phone, password } = loginSchema.parse(req.body);
+
+      const tokens = await authService.loginWithPassword(phone, password);
+
       const user = await prisma.user.findFirst({
         where: { phone: phone.replace(/\D/g, '') },
         include: {

@@ -145,6 +145,7 @@ model User {
   otpCode      String?
   otpExpiresAt DateTime?
   lastLoginAt  DateTime?
+  passwordHash String?   // Fallback login (scrypt "salt:hash"), independent of WhatsApp OTP delivery
 
   // Professional specific
   color        String?   // Calendar color

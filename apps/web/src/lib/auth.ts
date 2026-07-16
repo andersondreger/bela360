@@ -68,6 +68,6 @@ export async function logout() {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('userRole');
-    window.location.href = '/';
+    window.location.href = '/login';
   }
 }
