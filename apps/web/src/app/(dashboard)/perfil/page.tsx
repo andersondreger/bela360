@@ -41,6 +41,10 @@ export default function PerfilPage() {
         setLoading(true);
         setError(null);
 
+        // Ensures a ProfessionalProfile row exists (auto-created by getProfile)
+        // before querying marketing links, which 404 without one.
+        await professionalApi.getProfile().catch(() => null);
+
         const [dash, badgeList, ranking, marketing] = await Promise.all([
           professionalApi.getDashboard(),
           professionalApi.getBadges(),
