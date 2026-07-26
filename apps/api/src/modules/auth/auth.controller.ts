@@ -217,6 +217,7 @@ export class AuthController {
             email: user.email,
             role: user.role,
             isActive: user.isActive,
+            isSuperAdmin: user.isSuperAdmin,
             lastLoginAt: user.lastLoginAt,
           },
           business: user.business,

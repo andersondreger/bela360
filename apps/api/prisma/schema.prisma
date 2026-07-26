@@ -67,6 +67,17 @@ enum DayOfWeek {
   SUNDAY
 }
 
+// Modules gated behind the platform's paid tier ("on demand" unlock).
+// Every business starts on the básico plan (everything else); these need
+// an active PlatformCoupon redemption. Keep this the single source of
+// truth — application code derives the same list from this enum.
+enum PlatformModule {
+  MARKETING
+  AUTOMATION
+  LOYALTY
+  INVENTORY
+}
+
 // ============================================
 // CORE MODELS
 // ============================================
@@ -127,6 +138,9 @@ model Business {
   contentTemplates ContentTemplate[]
   commissionPayouts CommissionPayout[]
 
+  // Platform plan
+  platformCoupons PlatformCoupon[]
+
   @@index([phone])
   @@index([status])
   @@map("businesses")
@@ -140,6 +154,7 @@ model User {
   email        String?
   role         UserRole  @default(PROFESSIONAL)
   isActive     Boolean   @default(true)
+  isSuperAdmin Boolean   @default(false) // Platform operator (Anderson), independent of per-business role. Grants coupon issuance.
 
   // Authentication
   otpCode      String?
@@ -177,6 +192,9 @@ model User {
   // Commission payout relations
   commissionPayouts  CommissionPayout[] @relation("ProfessionalPayouts")
   processedPayouts   CommissionPayout[] @relation("ProcessedPayouts")
+
+  // Platform plan coupons issued by this user (only meaningful when isSuperAdmin)
+  couponsIssued      PlatformCoupon[] @relation("CouponIssuedBy")
 
   @@unique([businessId, phone])
   @@index([businessId])
@@ -1415,4 +1433,35 @@ model ContentTemplate {
   @@index([businessId])
   @@index([category])
   @@map("content_templates")
+}
+
+// ============================================
+// PLATFORM PLAN (bela360-the-platform's own plan for its salon tenants)
+// ============================================
+
+model PlatformCoupon {
+  id          String    @id @default(cuid())
+  code        String    @unique
+
+  modules     PlatformModule[] // which gated modules this coupon unlocks
+  durationDays Int              // validity length after redemption
+
+  // Optional targeting: if set, only this business can redeem the coupon
+  targetBusinessId String?
+
+  // Redemption
+  businessId  String?   // set once redeemed
+  redeemedAt  DateTime?
+  expiresAt   DateTime? // computed at redemption time (redeemedAt + durationDays)
+
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  business    Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  createdBy   User      @relation("CouponIssuedBy", fields: [createdById], references: [id])
+
+  @@index([businessId])
+  @@index([code])
+  @@map("platform_coupons")
 }

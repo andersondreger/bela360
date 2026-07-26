@@ -1,13 +1,25 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { authController } from './auth.controller';
 import { authMiddleware } from '../../common/middleware/auth.middleware';
+import { RateLimitError } from '../../common/errors';
 
 const router: Router = Router();
 
+// Stricter than the global API limiter: these endpoints gate account access
+// (OTP brute-force, password brute-force), so they get their own tight budget.
+const authAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, _res, next) => next(new RateLimitError()),
+});
+
 // Public routes
-router.post('/otp/request', (req, res, next) => authController.requestOTP(req, res, next));
-router.post('/otp/verify', (req, res, next) => authController.verifyOTP(req, res, next));
-router.post('/login', (req, res, next) => authController.login(req, res, next));
+router.post('/otp/request', authAttemptLimiter, (req, res, next) => authController.requestOTP(req, res, next));
+router.post('/otp/verify', authAttemptLimiter, (req, res, next) => authController.verifyOTP(req, res, next));
+router.post('/login', authAttemptLimiter, (req, res, next) => authController.login(req, res, next));
 router.post('/refresh', (req, res, next) => authController.refreshToken(req, res, next));
 
 // Protected routes

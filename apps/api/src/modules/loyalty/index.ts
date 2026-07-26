@@ -1,7 +1,49 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../config';
 
 const router: Router = Router();
+
+const loyaltyProgramSchema = z.object({
+  isActive: z.boolean().optional(),
+  pointsPerReal: z.number().positive().optional(),
+  useCashback: z.boolean().optional(),
+  cashbackPercent: z.number().min(0).max(100).optional(),
+  silverThreshold: z.number().int().nonnegative().optional(),
+  goldThreshold: z.number().int().nonnegative().optional(),
+  diamondThreshold: z.number().int().nonnegative().optional(),
+  bronzeDiscount: z.number().min(0).max(100).optional(),
+  silverDiscount: z.number().min(0).max(100).optional(),
+  goldDiscount: z.number().min(0).max(100).optional(),
+  diamondDiscount: z.number().min(0).max(100).optional(),
+  pointsExpirationMonths: z.number().int().positive().optional(),
+});
+
+const addPointsSchema = z.object({
+  amount: z.number().positive(),
+  appointmentId: z.string().cuid().optional(),
+  description: z.string().optional(),
+});
+
+const createRewardSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  pointsCost: z.number().int().positive(),
+  type: z.enum(['DISCOUNT_PERCENT', 'DISCOUNT_FIXED', 'FREE_SERVICE', 'FREE_PRODUCT', 'CASHBACK']),
+  discountPercent: z.number().min(0).max(100).optional(),
+  discountAmount: z.number().nonnegative().optional(),
+  serviceId: z.string().cuid().optional(),
+  productId: z.string().cuid().optional(),
+  validityDays: z.number().int().positive().optional(),
+  maxRedemptions: z.number().int().positive().optional(),
+});
+
+function handleRouteError(error: unknown, res: Response, fallbackMessage: string) {
+  if (error instanceof z.ZodError) {
+    return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+  }
+  res.status(500).json({ error: fallbackMessage });
+}
 
 // Get loyalty program for business
 router.get('/program', async (req: Request, res: Response) => {
@@ -32,7 +74,7 @@ router.get('/program', async (req: Request, res: Response) => {
 router.post('/program', async (req: Request, res: Response) => {
   try {
     const businessId = req.user!.businessId;
-    const data = req.body;
+    const data = loyaltyProgramSchema.parse(req.body);
 
     const program = await prisma.loyaltyProgram.upsert({
       where: { businessId },
@@ -56,7 +98,7 @@ router.post('/program', async (req: Request, res: Response) => {
 
     res.json(program);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar programa' });
+    handleRouteError(error, res, 'Erro ao salvar programa');
   }
 });
 
@@ -103,7 +145,7 @@ router.post('/clients/:clientId/points/add', async (req: Request, res: Response)
   try {
     const businessId = req.user!.businessId;
     const { clientId } = req.params;
-    const { amount, appointmentId, description } = req.body;
+    const { amount, appointmentId, description } = addPointsSchema.parse(req.body);
 
     const client = await prisma.client.findFirst({ where: { id: clientId, businessId } });
     if (!client) {
@@ -164,7 +206,7 @@ router.post('/clients/:clientId/points/add', async (req: Request, res: Response)
 
     res.json({ pointsAdded: pointsToAdd, newBalance, newTier });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao adicionar pontos' });
+    handleRouteError(error, res, 'Erro ao adicionar pontos');
   }
 });
 
@@ -193,7 +235,7 @@ router.get('/rewards', async (req: Request, res: Response) => {
 router.post('/rewards', async (req: Request, res: Response) => {
   try {
     const businessId = req.user!.businessId;
-    const data = req.body;
+    const data = createRewardSchema.parse(req.body);
 
     const program = await prisma.loyaltyProgram.findUnique({
       where: { businessId },
@@ -201,6 +243,20 @@ router.post('/rewards', async (req: Request, res: Response) => {
 
     if (!program) {
       return res.status(404).json({ error: 'Programa de fidelidade não encontrado' });
+    }
+
+    if (data.serviceId) {
+      const service = await prisma.service.findFirst({ where: { id: data.serviceId, businessId } });
+      if (!service) {
+        return res.status(404).json({ error: 'Serviço não encontrado' });
+      }
+    }
+
+    if (data.productId) {
+      const product = await prisma.product.findFirst({ where: { id: data.productId, businessId } });
+      if (!product) {
+        return res.status(404).json({ error: 'Produto não encontrado' });
+      }
     }
 
     const reward = await prisma.loyaltyReward.create({
@@ -221,7 +277,7 @@ router.post('/rewards', async (req: Request, res: Response) => {
 
     res.json(reward);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar recompensa' });
+    handleRouteError(error, res, 'Erro ao criar recompensa');
   }
 });
 

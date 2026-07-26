@@ -6,6 +6,7 @@ export interface CurrentUser {
   phone: string;
   email: string | null;
   role: string;
+  isSuperAdmin: boolean;
   business: {
     id: string;
     name: string;

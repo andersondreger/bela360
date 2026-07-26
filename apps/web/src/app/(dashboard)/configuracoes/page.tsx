@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Save, MessageCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Save, MessageCircle, CheckCircle2, Sparkles } from 'lucide-react';
 import { PageHeader, Button, Input, Badge } from '@/components/ui';
-import { businessApi, type BusinessBranding } from '@/lib/api';
+import { businessApi, platformApi, PREMIUM_MODULE_LABELS, type BusinessBranding, type PremiumModule } from '@/lib/api';
 
 export default function ConfiguracoesPage() {
-  const [activeTab, setActiveTab] = useState<'negocio' | 'marca' | 'horarios' | 'profissionais' | 'whatsapp'>('negocio');
+  const [activeTab, setActiveTab] = useState<'negocio' | 'marca' | 'plano' | 'horarios' | 'profissionais' | 'whatsapp'>('negocio');
 
   return (
     <div className="space-y-6">
@@ -18,6 +18,7 @@ export default function ConfiguracoesPage() {
           {[
             { id: 'negocio', label: 'Negócio' },
             { id: 'marca', label: 'Marca' },
+            { id: 'plano', label: 'Plano' },
             { id: 'horarios', label: 'Horários' },
             { id: 'profissionais', label: 'Profissionais' },
             { id: 'whatsapp', label: 'WhatsApp' },
@@ -58,6 +59,8 @@ export default function ConfiguracoesPage() {
         )}
 
         {activeTab === 'marca' && <MarcaTab />}
+
+        {activeTab === 'plano' && <PlanoTab />}
 
         {activeTab === 'horarios' && (
           <div className="space-y-6 max-w-2xl">
@@ -316,6 +319,97 @@ function MarcaTab() {
         {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
         {saved ? 'Salvo!' : 'Salvar marca'}
       </Button>
+    </div>
+  );
+}
+
+const ALL_PREMIUM_MODULES = Object.keys(PREMIUM_MODULE_LABELS) as PremiumModule[];
+
+function PlanoTab() {
+  const [unlocked, setUnlocked] = useState<Partial<Record<PremiumModule, string>>>({});
+  const [loading, setLoading] = useState(true);
+  const [code, setCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const loadStatus = () => {
+    setLoading(true);
+    businessApi
+      .getCurrent()
+      .then((business) => setUnlocked(business.settings?.premiumModules || {}))
+      .catch(() => setError('Não foi possível carregar o plano atual.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(loadStatus, []);
+
+  const isActive = (moduleUntil?: string) => !!moduleUntil && new Date(moduleUntil).getTime() > Date.now();
+
+  const handleRedeem = async () => {
+    if (!code.trim()) return;
+    setRedeeming(true);
+    setError('');
+    setMessage('');
+    try {
+      const business = await platformApi.redeemCoupon(code.trim());
+      setUnlocked(business.settings?.premiumModules || {});
+      setMessage('Cupom aplicado! Os módulos abaixo já estão liberados.');
+      setCode('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao resgatar o cupom.');
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-muted-foreground">Carregando...</p>;
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <p className="text-muted-foreground">
+        O bela360 básico já cobre agenda, clientes, serviços e WhatsApp. Marketing, automação, fidelidade e
+        estoque fazem parte do plano premium — fale com o suporte para receber um cupom de desbloqueio.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {ALL_PREMIUM_MODULES.map((module) => {
+          const active = isActive(unlocked[module]);
+          return (
+            <div
+              key={module}
+              className={`rounded-xl border p-3 text-center ${
+                active ? 'border-primary/50 bg-primary/5' : 'border-border'
+              }`}
+            >
+              <Sparkles className={`mx-auto mb-1.5 h-5 w-5 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+              <p className="text-sm font-medium text-foreground">{PREMIUM_MODULE_LABELS[module]}</p>
+              <Badge variant={active ? 'success' : 'default'} className="mt-1.5">
+                {active ? 'Liberado' : 'Bloqueado'}
+              </Badge>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-end gap-3">
+        <Input
+          label="Código do cupom"
+          type="text"
+          placeholder="Ex: A3F9C1B2"
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          className="flex-1"
+        />
+        <Button type="button" variant="primary" onClick={handleRedeem} loading={redeeming}>
+          Resgatar cupom
+        </Button>
+      </div>
+
+      {message && <p className="text-sm text-emerald-600">{message}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

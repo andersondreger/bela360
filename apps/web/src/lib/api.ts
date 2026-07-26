@@ -136,6 +136,49 @@ export const businessApi = {
     api.put<Business>('/business', { settings: { branding } }),
 };
 
+// Platform plan/coupon API
+export type PremiumModule = 'MARKETING' | 'AUTOMATION' | 'LOYALTY' | 'INVENTORY';
+
+export const PREMIUM_MODULE_LABELS: Record<PremiumModule, string> = {
+  MARKETING: 'Marketing',
+  AUTOMATION: 'Automação',
+  LOYALTY: 'Fidelidade',
+  INVENTORY: 'Estoque',
+};
+
+export interface PlatformBusiness {
+  id: string;
+  name: string;
+  phone: string;
+  status: string;
+  settings?: { premiumModules?: Partial<Record<PremiumModule, string>>; [key: string]: unknown };
+  createdAt: string;
+}
+
+export interface PlatformCoupon {
+  id: string;
+  code: string;
+  modules: PremiumModule[];
+  durationDays: number;
+  targetBusinessId: string | null;
+  businessId: string | null;
+  redeemedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  business: { id: string; name: string } | null;
+}
+
+export const platformApi = {
+  listBusinesses: () => api.get<PlatformBusiness[]>('/platform/businesses'),
+
+  listCoupons: () => api.get<PlatformCoupon[]>('/platform/coupons'),
+
+  createCoupon: (data: { modules: PremiumModule[]; durationDays: number; targetBusinessId?: string }) =>
+    api.post<PlatformCoupon>('/platform/coupons', data),
+
+  redeemCoupon: (code: string) => api.post<PlatformBusiness>('/platform/coupons/redeem', { code }),
+};
+
 // WhatsApp API
 export interface WhatsAppStatus {
   connected: boolean;

@@ -8,6 +8,7 @@ declare global {
         businessId: string;
         role: UserRole;
       };
+      superAdmin?: boolean;
     }
   }
 }

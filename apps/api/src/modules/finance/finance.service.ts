@@ -20,14 +20,19 @@ const markPayoutPaidSchema = z.object({
 });
 
 // Validation schemas
-const createPaymentSchema = z.object({
-  appointmentId: z.string().cuid(),
-  amount: z.number().positive(),
-  discount: z.number().min(0).optional(),
-  method: z.nativeEnum(PaymentMethod),
-  notes: z.string().optional(),
-  receiptUrl: z.string().url().optional(),
-});
+const createPaymentSchema = z
+  .object({
+    appointmentId: z.string().cuid(),
+    amount: z.number().positive(),
+    discount: z.number().min(0).optional(),
+    method: z.nativeEnum(PaymentMethod),
+    notes: z.string().optional(),
+    receiptUrl: z.string().url().optional(),
+  })
+  .refine((data) => (data.discount ?? 0) <= data.amount, {
+    message: 'O desconto não pode ser maior que o valor do pagamento',
+    path: ['discount'],
+  });
 
 const commissionConfigSchema = z.object({
   professionalId: z.string().cuid(),

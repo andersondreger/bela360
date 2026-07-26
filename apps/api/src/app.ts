@@ -19,6 +19,8 @@ import { marketingRoutes } from './modules/marketing';
 import { loyaltyRoutes } from './modules/loyalty';
 import { inventoryRoutes } from './modules/inventory';
 import { professionalRoutes } from './modules/professional';
+import { platformRoutes, requirePremiumModule } from './modules/platform';
+import { PlatformModule } from '@prisma/client';
 import { authMiddleware } from './common/middleware/auth.middleware';
 
 // Create Express app
@@ -111,13 +113,14 @@ app.use('/api/services', authMiddleware, servicesRoutes);
 app.use('/api/appointments', authMiddleware, appointmentsRoutes);
 app.use('/api/clients', authMiddleware, clientsRoutes);
 app.use('/api/analytics', authMiddleware, analyticsRoutes);
-app.use('/api/automation', authMiddleware, automationRoutes);
+app.use('/api/automation', authMiddleware, requirePremiumModule(PlatformModule.AUTOMATION), automationRoutes);
 app.use('/api/waitlist', authMiddleware, waitlistRoutes);
 app.use('/api/finance', authMiddleware, financeRoutes);
-app.use('/api/marketing', authMiddleware, marketingRoutes);
-app.use('/api/loyalty', authMiddleware, loyaltyRoutes);
-app.use('/api/inventory', authMiddleware, inventoryRoutes);
+app.use('/api/marketing', authMiddleware, requirePremiumModule(PlatformModule.MARKETING), marketingRoutes);
+app.use('/api/loyalty', authMiddleware, requirePremiumModule(PlatformModule.LOYALTY), loyaltyRoutes);
+app.use('/api/inventory', authMiddleware, requirePremiumModule(PlatformModule.INVENTORY), inventoryRoutes);
 app.use('/api/professional', authMiddleware, professionalRoutes);
+app.use('/api/platform', authMiddleware, platformRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

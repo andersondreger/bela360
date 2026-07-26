@@ -1,7 +1,47 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../config';
 
 const router: Router = Router();
+
+const createProductSchema = z.object({
+  name: z.string().min(1),
+  brand: z.string().optional(),
+  description: z.string().optional(),
+  sku: z.string().optional(),
+  barcode: z.string().optional(),
+  category: z.enum(['RESALE', 'INTERNAL_USE', 'BOTH']).optional(),
+  costPrice: z.number().nonnegative(),
+  salePrice: z.number().nonnegative().optional(),
+  initialStock: z.number().nonnegative().optional(),
+  minStock: z.number().nonnegative().optional(),
+  unit: z.string().optional(),
+  expirationDate: z.string().datetime().optional(),
+  imageUrl: z.string().url().optional(),
+});
+
+const updateProductSchema = createProductSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+const stockMovementSchema = z.object({
+  type: z.enum(['PURCHASE', 'SALE', 'SERVICE_USE', 'ADJUSTMENT', 'RETURN', 'LOSS', 'EXPIRED']),
+  quantity: z.number().positive(),
+  unitCost: z.number().nonnegative().optional(),
+  notes: z.string().optional(),
+  appointmentId: z.string().cuid().optional(),
+});
+
+const linkServiceSchema = z.object({
+  quantityUsed: z.number().positive(),
+});
+
+function handleRouteError(error: unknown, res: Response, fallbackMessage: string) {
+  if (error instanceof z.ZodError) {
+    return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+  }
+  res.status(500).json({ error: fallbackMessage });
+}
 
 // List all products
 router.get('/products', async (req: Request, res: Response) => {
@@ -69,7 +109,7 @@ router.get('/products/:id', async (req: Request, res: Response) => {
 router.post('/products', async (req: Request, res: Response) => {
   try {
     const businessId = req.user!.businessId;
-    const data = req.body;
+    const data = createProductSchema.parse(req.body);
 
     const product = await prisma.product.create({
       data: {
@@ -108,7 +148,7 @@ router.post('/products', async (req: Request, res: Response) => {
 
     res.json(product);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar produto' });
+    handleRouteError(error, res, 'Erro ao criar produto');
   }
 });
 
@@ -117,7 +157,7 @@ router.put('/products/:id', async (req: Request, res: Response) => {
   try {
     const businessId = req.user!.businessId;
     const { id } = req.params;
-    const data = req.body;
+    const data = updateProductSchema.parse(req.body);
 
     const existing = await prisma.product.findFirst({ where: { id, businessId } });
     if (!existing) {
@@ -145,7 +185,7 @@ router.put('/products/:id', async (req: Request, res: Response) => {
 
     res.json(product);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao atualizar produto' });
+    handleRouteError(error, res, 'Erro ao atualizar produto');
   }
 });
 
@@ -155,7 +195,7 @@ router.post('/products/:id/movement', async (req: Request, res: Response) => {
     const businessId = req.user!.businessId;
     const userId = req.user!.userId;
     const { id } = req.params;
-    const { type, quantity, unitCost, notes, appointmentId } = req.body;
+    const { type, quantity, unitCost, notes, appointmentId } = stockMovementSchema.parse(req.body);
 
     const product = await prisma.product.findFirst({
       where: { id, businessId },
@@ -197,7 +237,7 @@ router.post('/products/:id/movement', async (req: Request, res: Response) => {
 
     res.json({ movement, product: updatedProduct });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao registrar movimentação' });
+    handleRouteError(error, res, 'Erro ao registrar movimentação');
   }
 });
 
@@ -206,7 +246,7 @@ router.post('/products/:productId/services/:serviceId', async (req: Request, res
   try {
     const businessId = req.user!.businessId;
     const { productId, serviceId } = req.params;
-    const { quantityUsed } = req.body;
+    const { quantityUsed } = linkServiceSchema.parse(req.body);
 
     const [product, service] = await Promise.all([
       prisma.product.findFirst({ where: { id: productId, businessId } }),
@@ -225,7 +265,7 @@ router.post('/products/:productId/services/:serviceId', async (req: Request, res
 
     res.json(serviceProduct);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao vincular produto' });
+    handleRouteError(error, res, 'Erro ao vincular produto');
   }
 });
 

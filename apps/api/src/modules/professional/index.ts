@@ -1,7 +1,56 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { PlatformModule } from '@prisma/client';
 import { prisma } from '../../config';
+import { requirePremiumModule } from '../platform';
 
 const router: Router = Router();
+
+const updateProfileSchema = z.object({
+  bio: z.string().max(1000).optional(),
+  specialties: z.array(z.string()).optional(),
+  photoUrl: z.string().url().optional(),
+  coverPhotoUrl: z.string().url().optional(),
+  instagramUrl: z.string().url().optional(),
+  facebookUrl: z.string().url().optional(),
+  tiktokUrl: z.string().url().optional(),
+  portfolioImages: z.array(z.string().url()).optional(),
+  isPublic: z.boolean().optional(),
+});
+
+const setGoalSchema = z.object({
+  type: z.enum(['REVENUE', 'APPOINTMENTS', 'NEW_CLIENTS', 'RATING', 'RETURN_RATE']),
+  targetValue: z.number().positive(),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020),
+  bonusAmount: z.number().nonnegative().optional(),
+});
+
+const awardBadgeSchema = z.object({
+  type: z.enum(['MILESTONE', 'RATING', 'STREAK', 'SPECIAL']),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  iconUrl: z.string().url().optional(),
+  requirement: z.string().optional(),
+  achievedValue: z.string().optional(),
+});
+
+const respondRatingSchema = z.object({
+  response: z.string().min(1).max(1000),
+});
+
+const sendMarketingMessageSchema = z.object({
+  message: z.string().min(1).max(4096).optional(),
+  clientIds: z.array(z.string().cuid()).optional(),
+  templateId: z.string().cuid().optional(),
+});
+
+function handleRouteError(error: unknown, res: Response, fallbackMessage: string) {
+  if (error instanceof z.ZodError) {
+    return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+  }
+  res.status(500).json({ error: fallbackMessage });
+}
 
 // Get professional profile
 router.get('/profile', async (req: Request, res: Response) => {
@@ -57,7 +106,7 @@ router.get('/profile', async (req: Request, res: Response) => {
 router.put('/profile', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const data = req.body;
+    const data = updateProfileSchema.parse(req.body);
 
     const profile = await prisma.professionalProfile.update({
       where: { userId },
@@ -76,7 +125,7 @@ router.put('/profile', async (req: Request, res: Response) => {
 
     res.json(profile);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao atualizar perfil' });
+    handleRouteError(error, res, 'Erro ao atualizar perfil');
   }
 });
 
@@ -257,7 +306,7 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
 
     const businessId = req.user!.businessId;
     const { userId: targetUserId } = req.params;
-    const data = req.body;
+    const data = setGoalSchema.parse(req.body);
 
     const targetUser = await prisma.user.findFirst({
       where: { id: targetUserId, businessId },
@@ -301,7 +350,7 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
 
     res.json(goal);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar meta' });
+    handleRouteError(error, res, 'Erro ao salvar meta');
   }
 });
 
@@ -457,7 +506,7 @@ router.post('/badges/:userId', async (req: Request, res: Response) => {
 
     const businessId = req.user!.businessId;
     const { userId: targetUserId } = req.params;
-    const data = req.body;
+    const data = awardBadgeSchema.parse(req.body);
 
     const targetUser = await prisma.user.findFirst({
       where: { id: targetUserId, businessId },
@@ -489,7 +538,7 @@ router.post('/badges/:userId', async (req: Request, res: Response) => {
 
     res.json(badge);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar badge' });
+    handleRouteError(error, res, 'Erro ao criar badge');
   }
 });
 
@@ -498,7 +547,7 @@ router.post('/ratings/:ratingId/respond', async (req: Request, res: Response) =>
   try {
     const userId = req.user!.userId;
     const { ratingId } = req.params;
-    const { response } = req.body;
+    const { response } = respondRatingSchema.parse(req.body);
 
     const rating = await prisma.clientRating.findUnique({
       where: { id: ratingId },
@@ -518,7 +567,7 @@ router.post('/ratings/:ratingId/respond', async (req: Request, res: Response) =>
 
     res.json(updated);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao responder avaliação' });
+    handleRouteError(error, res, 'Erro ao responder avaliação');
   }
 });
 
@@ -796,11 +845,11 @@ router.post('/public/:slug/view', async (_req: Request, res: Response) => {
 });
 
 // Send promotional message to professional's clients
-router.post('/marketing/send', async (req: Request, res: Response) => {
+router.post('/marketing/send', requirePremiumModule(PlatformModule.MARKETING), async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
     const businessId = req.user!.businessId;
-    const { message, clientIds, templateId } = req.body;
+    const { message, clientIds, templateId } = sendMarketingMessageSchema.parse(req.body);
 
     // Get business WhatsApp config
     const business = await prisma.business.findUnique({
@@ -845,8 +894,8 @@ router.post('/marketing/send', async (req: Request, res: Response) => {
     // Get message content from template if provided
     let finalMessage = message;
     if (templateId) {
-      const template = await prisma.contentTemplate.findUnique({
-        where: { id: templateId },
+      const template = await prisma.contentTemplate.findFirst({
+        where: { id: templateId, OR: [{ businessId }, { businessId: null }] },
       });
       if (template) {
         finalMessage = template.content;
@@ -867,7 +916,7 @@ router.post('/marketing/send', async (req: Request, res: Response) => {
       data: results,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao enviar mensagens' });
+    handleRouteError(error, res, 'Erro ao enviar mensagens');
   }
 });
 
