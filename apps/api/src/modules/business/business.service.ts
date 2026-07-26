@@ -215,6 +215,21 @@ export class BusinessService {
    * Update business
    */
   async update(id: string, data: UpdateBusinessDTO): Promise<any> {
+    let mergedSettings: Record<string, any> | undefined;
+
+    if (data.settings) {
+      const current = await prisma.business.findUniqueOrThrow({ where: { id } });
+      const currentSettings = (current.settings as Record<string, any>) || {};
+      mergedSettings = { ...currentSettings, ...data.settings };
+
+      if (data.settings.branding) {
+        mergedSettings.branding = {
+          ...(currentSettings.branding || {}),
+          ...data.settings.branding,
+        };
+      }
+    }
+
     const business = await prisma.business.update({
       where: { id },
       data: {
@@ -225,7 +240,7 @@ export class BusinessService {
         ...(data.city && { city: data.city }),
         ...(data.state && { state: data.state }),
         ...(data.zipCode && { zipCode: data.zipCode }),
-        ...(data.settings && { settings: data.settings }),
+        ...(mergedSettings && { settings: mergedSettings }),
       },
     });
 
@@ -310,9 +325,15 @@ export class BusinessService {
    * Update professional
    */
   async updateProfessional(
+    businessId: string,
     id: string,
     data: Partial<CreateProfessionalDTO>
   ): Promise<any> {
+    const existing = await prisma.user.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Profissional não encontrado', 404);
+    }
+
     const professional = await prisma.user.update({
       where: { id },
       data: {
@@ -331,7 +352,12 @@ export class BusinessService {
   /**
    * Remove professional (soft delete)
    */
-  async removeProfessional(id: string): Promise<void> {
+  async removeProfessional(businessId: string, id: string): Promise<void> {
+    const existing = await prisma.user.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Profissional não encontrado', 404);
+    }
+
     await prisma.user.update({
       where: { id },
       data: { isActive: false },

@@ -6,7 +6,7 @@ const router: Router = Router();
 // List all products
 router.get('/products', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
     const { category, lowStock, search } = req.query;
 
     const where: any = { businessId };
@@ -38,10 +38,11 @@ router.get('/products', async (req: Request, res: Response) => {
 // Get single product
 router.get('/products/:id', async (req: Request, res: Response) => {
   try {
+    const businessId = req.user!.businessId;
     const { id } = req.params;
 
-    const product = await prisma.product.findUnique({
-      where: { id },
+    const product = await prisma.product.findFirst({
+      where: { id, businessId },
       include: {
         movements: {
           orderBy: { createdAt: 'desc' },
@@ -67,7 +68,7 @@ router.get('/products/:id', async (req: Request, res: Response) => {
 // Create product
 router.post('/products', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
     const data = req.body;
 
     const product = await prisma.product.create({
@@ -114,8 +115,14 @@ router.post('/products', async (req: Request, res: Response) => {
 // Update product
 router.put('/products/:id', async (req: Request, res: Response) => {
   try {
+    const businessId = req.user!.businessId;
     const { id } = req.params;
     const data = req.body;
+
+    const existing = await prisma.product.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
 
     const product = await prisma.product.update({
       where: { id },
@@ -145,13 +152,13 @@ router.put('/products/:id', async (req: Request, res: Response) => {
 // Stock movement
 router.post('/products/:id/movement', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
-    const userId = (req as any).userId;
+    const businessId = req.user!.businessId;
+    const userId = req.user!.userId;
     const { id } = req.params;
     const { type, quantity, unitCost, notes, appointmentId } = req.body;
 
-    const product = await prisma.product.findUnique({
-      where: { id },
+    const product = await prisma.product.findFirst({
+      where: { id, businessId },
     });
 
     if (!product) {
@@ -197,8 +204,18 @@ router.post('/products/:id/movement', async (req: Request, res: Response) => {
 // Link product to service
 router.post('/products/:productId/services/:serviceId', async (req: Request, res: Response) => {
   try {
+    const businessId = req.user!.businessId;
     const { productId, serviceId } = req.params;
     const { quantityUsed } = req.body;
+
+    const [product, service] = await Promise.all([
+      prisma.product.findFirst({ where: { id: productId, businessId } }),
+      prisma.service.findFirst({ where: { id: serviceId, businessId } }),
+    ]);
+
+    if (!product || !service) {
+      return res.status(404).json({ error: 'Produto ou serviço não encontrado' });
+    }
 
     const serviceProduct = await prisma.serviceProduct.upsert({
       where: { serviceId_productId: { serviceId, productId } },
@@ -215,7 +232,13 @@ router.post('/products/:productId/services/:serviceId', async (req: Request, res
 // Remove product from service
 router.delete('/products/:productId/services/:serviceId', async (req: Request, res: Response) => {
   try {
+    const businessId = req.user!.businessId;
     const { productId, serviceId } = req.params;
+
+    const product = await prisma.product.findFirst({ where: { id: productId, businessId } });
+    if (!product) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
 
     await prisma.serviceProduct.delete({
       where: { serviceId_productId: { serviceId, productId } },
@@ -230,7 +253,7 @@ router.delete('/products/:productId/services/:serviceId', async (req: Request, r
 // Get low stock alerts
 router.get('/alerts/low-stock', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
 
     const products = await prisma.product.findMany({
       where: { businessId, isActive: true },
@@ -254,7 +277,7 @@ router.get('/alerts/low-stock', async (req: Request, res: Response) => {
 // Inventory stats
 router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
 
     const [products, movements] = await Promise.all([
       prisma.product.findMany({
@@ -313,7 +336,7 @@ router.get('/stats', async (req: Request, res: Response) => {
 // Stock movement history
 router.get('/movements', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
     const { productId, type, startDate, endDate, limit = '50' } = req.query;
 
     const where: any = { businessId };

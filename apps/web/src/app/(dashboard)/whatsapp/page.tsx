@@ -5,9 +5,6 @@ import { Settings, Send } from 'lucide-react';
 import { WhatsAppConfigModal } from '@/components/WhatsAppConfigModal';
 import { Button, Badge, Input, PageHeader } from '@/components/ui';
 
-// TODO: Get from auth context
-const MOCK_BUSINESS_ID = 'demo-business-id';
-
 const mockConversations = [
   { id: '1', clientName: 'Maria Silva', lastMessage: 'Quero agendar um corte para amanha', time: '10:30', unread: 2, status: 'waiting' },
   { id: '2', clientName: 'Joao Santos', lastMessage: 'Confirmado! Ate amanha as 14h', time: '10:15', unread: 0, status: 'resolved' },
@@ -161,7 +158,6 @@ export default function WhatsAppPage() {
       <WhatsAppConfigModal
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
-        businessId={MOCK_BUSINESS_ID}
         onStatusChange={setIsConnected}
       />
     </div>

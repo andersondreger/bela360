@@ -19,7 +19,7 @@ function clearSessionAndRedirect() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('userRole');
-  window.location.href = '/';
+  window.location.href = '/login';
 }
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -112,6 +112,30 @@ export const api = {
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
 };
 
+// Business API
+export interface BusinessBranding {
+  displayName?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+}
+
+export interface Business {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  status: string;
+  whatsappConnected: boolean;
+  settings?: { branding?: BusinessBranding; [key: string]: unknown };
+}
+
+export const businessApi = {
+  getCurrent: () => api.get<Business>('/business'),
+
+  updateBranding: (branding: BusinessBranding) =>
+    api.put<Business>('/business', { settings: { branding } }),
+};
+
 // WhatsApp API
 export interface WhatsAppStatus {
   connected: boolean;
@@ -126,17 +150,13 @@ export interface WhatsAppConnectResult {
 }
 
 export const whatsappApi = {
-  connect: (businessId: string) =>
-    api.post<WhatsAppConnectResult>('/whatsapp/connect', { businessId }),
+  connect: () => api.post<WhatsAppConnectResult>('/whatsapp/connect'),
 
-  getStatus: (businessId: string) =>
-    api.get<WhatsAppStatus>(`/whatsapp/status/${businessId}`),
+  getStatus: () => api.get<WhatsAppStatus>('/whatsapp/status'),
 
-  getQRCode: (businessId: string) =>
-    api.get<{ qrcode: string }>(`/whatsapp/qrcode/${businessId}`),
+  getQRCode: () => api.get<{ qrcode: string }>('/whatsapp/qrcode'),
 
-  disconnect: (businessId: string) =>
-    api.post<{ message: string }>(`/whatsapp/disconnect/${businessId}`),
+  disconnect: () => api.post<{ message: string }>('/whatsapp/disconnect'),
 };
 
 // Analytics API

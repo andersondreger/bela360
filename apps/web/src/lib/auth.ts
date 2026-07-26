@@ -13,6 +13,14 @@ export interface CurrentUser {
     type: string;
     status: string;
     whatsappConnected: boolean;
+    settings?: {
+      branding?: {
+        displayName?: string;
+        logoUrl?: string;
+        primaryColor?: string;
+      };
+      [key: string]: unknown;
+    };
   };
 }
 
@@ -45,7 +53,8 @@ export async function fetchCurrentUser(): Promise<CurrentUser | null> {
     }
 
     const json = await res.json();
-    return json.data as CurrentUser;
+    if (!json.data?.user) return null;
+    return { ...json.data.user, business: json.data.business } as CurrentUser;
   } catch {
     return null;
   }

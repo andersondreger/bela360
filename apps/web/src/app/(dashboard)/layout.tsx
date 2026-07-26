@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AuroraBackground, Logo } from '@/components/ui';
 import { fetchCurrentUser, logout, type CurrentUser } from '@/lib/auth';
+import { hexToHsl, shiftHslHue } from '@/lib/utils';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -80,14 +81,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const currentPage = navigation.find((item) => pathname.startsWith(item.href));
 
+  const branding = user.business.settings?.branding;
+  const primaryHsl = branding?.primaryColor ? hexToHsl(branding.primaryColor) : null;
+  const brandVars = primaryHsl
+    ? ({
+        '--primary': primaryHsl,
+        '--secondary': shiftHslHue(primaryHsl, 45),
+        '--ring': primaryHsl,
+      } as React.CSSProperties)
+    : undefined;
+
   return (
-    <div className="relative min-h-screen bg-background">
+    <div className="relative min-h-screen bg-background" style={brandVars}>
       <AuroraBackground variant="subtle" className="fixed" />
 
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-border/60 bg-card/80 backdrop-blur-xl">
         <div className="flex h-16 items-center px-6">
-          <Logo />
+          {branding?.logoUrl ? (
+            <div className="flex items-center gap-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={branding.logoUrl} alt={branding.displayName || user.business.name} className="h-9 w-9 rounded-lg object-cover" />
+              <span className="text-lg font-bold tracking-tight text-foreground">
+                {branding.displayName || user.business.name}
+              </span>
+            </div>
+          ) : (
+            <Logo />
+          )}
         </div>
         <nav className="space-y-1 overflow-y-auto p-4" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
           {navigation.map((item) => {

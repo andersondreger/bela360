@@ -137,9 +137,9 @@ export class ClientsService {
   /**
    * Get client by ID with full history
    */
-  async getById(id: string): Promise<any> {
-    const client = await prisma.client.findUnique({
-      where: { id },
+  async getById(businessId: string, id: string): Promise<any> {
+    const client = await prisma.client.findFirst({
+      where: { id, businessId },
       include: {
         appointments: {
           orderBy: { startTime: 'desc' },
@@ -181,7 +181,12 @@ export class ClientsService {
   /**
    * Update client
    */
-  async update(id: string, data: UpdateClientDTO): Promise<any> {
+  async update(businessId: string, id: string, data: UpdateClientDTO): Promise<any> {
+    const existing = await prisma.client.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Cliente não encontrado', 404);
+    }
+
     const client = await prisma.client.update({
       where: { id },
       data: {
@@ -202,7 +207,12 @@ export class ClientsService {
   /**
    * Delete client (hard delete - GDPR compliance)
    */
-  async delete(id: string): Promise<void> {
+  async delete(businessId: string, id: string): Promise<void> {
+    const existing = await prisma.client.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Cliente não encontrado', 404);
+    }
+
     // First delete related data
     await prisma.$transaction([
       prisma.message.deleteMany({ where: { clientId: id } }),

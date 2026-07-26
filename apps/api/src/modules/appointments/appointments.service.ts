@@ -31,13 +31,26 @@ export class AppointmentsService {
    * Create new appointment
    */
   async create(data: CreateAppointmentDTO): Promise<any> {
-    // Get service for duration
-    const service = await prisma.service.findUnique({
-      where: { id: data.serviceId },
+    // Get service for duration (scoped to this business)
+    const service = await prisma.service.findFirst({
+      where: { id: data.serviceId, businessId: data.businessId },
     });
 
     if (!service) {
       throw new AppError('Serviço não encontrado', 404);
+    }
+
+    const [client, professional] = await Promise.all([
+      prisma.client.findFirst({ where: { id: data.clientId, businessId: data.businessId } }),
+      prisma.user.findFirst({ where: { id: data.professionalId, businessId: data.businessId } }),
+    ]);
+
+    if (!client) {
+      throw new AppError('Cliente não encontrado', 404);
+    }
+
+    if (!professional) {
+      throw new AppError('Profissional não encontrado', 404);
     }
 
     // Calculate end time
@@ -157,9 +170,9 @@ export class AppointmentsService {
   /**
    * Get appointment by ID
    */
-  async getById(id: string): Promise<any> {
-    const appointment = await prisma.appointment.findUnique({
-      where: { id },
+  async getById(businessId: string, id: string): Promise<any> {
+    const appointment = await prisma.appointment.findFirst({
+      where: { id, businessId },
       include: {
         client: true,
         professional: true,
@@ -178,9 +191,9 @@ export class AppointmentsService {
   /**
    * Update appointment
    */
-  async update(id: string, data: UpdateAppointmentDTO): Promise<any> {
-    const existing = await prisma.appointment.findUnique({
-      where: { id },
+  async update(businessId: string, id: string, data: UpdateAppointmentDTO): Promise<any> {
+    const existing = await prisma.appointment.findFirst({
+      where: { id, businessId },
       include: { service: true },
     });
 
@@ -188,10 +201,28 @@ export class AppointmentsService {
       throw new AppError('Agendamento não encontrado', 404);
     }
 
+    if (data.professionalId) {
+      const professional = await prisma.user.findFirst({
+        where: { id: data.professionalId, businessId },
+      });
+      if (!professional) {
+        throw new AppError('Profissional não encontrado', 404);
+      }
+    }
+
+    if (data.serviceId) {
+      const targetService = await prisma.service.findFirst({
+        where: { id: data.serviceId, businessId },
+      });
+      if (!targetService) {
+        throw new AppError('Serviço não encontrado', 404);
+      }
+    }
+
     // If changing time or professional, check for conflicts
     if (data.startTime || data.professionalId) {
       const service = data.serviceId
-        ? await prisma.service.findUnique({ where: { id: data.serviceId } })
+        ? await prisma.service.findFirst({ where: { id: data.serviceId, businessId } })
         : existing.service;
 
       const startTime = data.startTime || existing.startTime;
@@ -246,7 +277,9 @@ export class AppointmentsService {
   /**
    * Confirm appointment
    */
-  async confirm(id: string): Promise<any> {
+  async confirm(businessId: string, id: string): Promise<any> {
+    await this.assertOwned(businessId, id);
+
     const appointment = await prisma.appointment.update({
       where: { id },
       data: {
@@ -278,7 +311,9 @@ export class AppointmentsService {
   /**
    * Cancel appointment
    */
-  async cancel(id: string, reason?: string): Promise<any> {
+  async cancel(businessId: string, id: string, reason?: string): Promise<any> {
+    await this.assertOwned(businessId, id);
+
     const appointment = await prisma.appointment.update({
       where: { id },
       data: {
@@ -313,7 +348,9 @@ export class AppointmentsService {
   /**
    * Mark appointment as completed
    */
-  async complete(id: string): Promise<any> {
+  async complete(businessId: string, id: string): Promise<any> {
+    await this.assertOwned(businessId, id);
+
     const appointment = await prisma.appointment.update({
       where: { id },
       data: { status: 'COMPLETED' },
@@ -334,7 +371,9 @@ export class AppointmentsService {
   /**
    * Mark as no-show
    */
-  async noShow(id: string): Promise<any> {
+  async noShow(businessId: string, id: string): Promise<any> {
+    await this.assertOwned(businessId, id);
+
     const appointment = await prisma.appointment.update({
       where: { id },
       data: { status: 'NO_SHOW' },
@@ -343,6 +382,16 @@ export class AppointmentsService {
     logger.info({ appointmentId: id }, 'Appointment marked as no-show');
 
     return appointment;
+  }
+
+  /**
+   * Throws if the appointment doesn't exist or doesn't belong to this business.
+   */
+  private async assertOwned(businessId: string, id: string): Promise<void> {
+    const appointment = await prisma.appointment.findFirst({ where: { id, businessId } });
+    if (!appointment) {
+      throw new AppError('Agendamento não encontrado', 404);
+    }
   }
 
   /**

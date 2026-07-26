@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Save, MessageCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Save, MessageCircle, CheckCircle2 } from 'lucide-react';
 import { PageHeader, Button, Input, Badge } from '@/components/ui';
+import { businessApi, type BusinessBranding } from '@/lib/api';
 
 export default function ConfiguracoesPage() {
-  const [activeTab, setActiveTab] = useState<'negocio' | 'horarios' | 'profissionais' | 'whatsapp'>('negocio');
+  const [activeTab, setActiveTab] = useState<'negocio' | 'marca' | 'horarios' | 'profissionais' | 'whatsapp'>('negocio');
 
   return (
     <div className="space-y-6">
@@ -16,6 +17,7 @@ export default function ConfiguracoesPage() {
         <nav className="flex gap-8">
           {[
             { id: 'negocio', label: 'Negócio' },
+            { id: 'marca', label: 'Marca' },
             { id: 'horarios', label: 'Horários' },
             { id: 'profissionais', label: 'Profissionais' },
             { id: 'whatsapp', label: 'WhatsApp' },
@@ -54,6 +56,8 @@ export default function ConfiguracoesPage() {
             </Button>
           </form>
         )}
+
+        {activeTab === 'marca' && <MarcaTab />}
 
         {activeTab === 'horarios' && (
           <div className="space-y-6 max-w-2xl">
@@ -211,6 +215,107 @@ export default function ConfiguracoesPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function MarcaTab() {
+  const [branding, setBranding] = useState<BusinessBranding>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    businessApi
+      .getCurrent()
+      .then((business) => setBranding(business.settings?.branding || {}))
+      .catch(() => setError('Não foi possível carregar a marca atual.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    setSaved(false);
+    try {
+      const business = await businessApi.updateBranding(branding);
+      setBranding(business.settings?.branding || branding);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar a marca.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-muted-foreground">Carregando...</p>;
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <p className="text-muted-foreground">
+        Personalize como o seu negócio aparece dentro do painel: nome de exibição, logo e cor principal.
+      </p>
+
+      <Input
+        label="Nome de exibição"
+        type="text"
+        placeholder="Ex: Studio Bela Vida"
+        value={branding.displayName || ''}
+        onChange={(e) => setBranding((b) => ({ ...b, displayName: e.target.value }))}
+      />
+
+      <Input
+        label="URL do logo"
+        type="url"
+        placeholder="https://.../logo.png"
+        value={branding.logoUrl || ''}
+        onChange={(e) => setBranding((b) => ({ ...b, logoUrl: e.target.value }))}
+      />
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">Cor principal</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={branding.primaryColor || '#8B2FE0'}
+            onChange={(e) => setBranding((b) => ({ ...b, primaryColor: e.target.value }))}
+            className="h-10 w-14 cursor-pointer rounded-lg border border-input bg-background"
+          />
+          <Input
+            type="text"
+            value={branding.primaryColor || ''}
+            placeholder="#8B2FE0"
+            onChange={(e) => setBranding((b) => ({ ...b, primaryColor: e.target.value }))}
+            className="flex-1"
+          />
+        </div>
+      </div>
+
+      {(branding.logoUrl || branding.displayName) && (
+        <div className="rounded-xl border border-border p-4">
+          <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Pré-visualização</p>
+          <div className="flex items-center gap-2.5">
+            {branding.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={branding.logoUrl} alt="Logo" className="h-9 w-9 rounded-lg object-cover" />
+            )}
+            <span className="text-lg font-bold tracking-tight text-foreground">
+              {branding.displayName || 'Nome do negócio'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Button type="button" variant="primary" onClick={handleSave} loading={saving}>
+        {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+        {saved ? 'Salvo!' : 'Salvar marca'}
+      </Button>
     </div>
   );
 }

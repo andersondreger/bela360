@@ -19,15 +19,15 @@ router.use(authMiddleware);
 router.post('/connect', (req, res, next) => whatsappController.connectInstance(req, res, next));
 
 // Get connection status
-router.get('/status/:businessId', (req, res, next) => whatsappController.getStatus(req, res, next));
+router.get('/status', (req, res, next) => whatsappController.getStatus(req, res, next));
 
 // Get QR code
-router.get('/qrcode/:businessId', (req, res, next) => whatsappController.getQRCode(req, res, next));
+router.get('/qrcode', (req, res, next) => whatsappController.getQRCode(req, res, next));
 
 // Send message
 router.post('/send', (req, res, next) => whatsappController.sendMessage(req, res, next));
 
 // Disconnect
-router.post('/disconnect/:businessId', (req, res, next) => whatsappController.disconnect(req, res, next));
+router.post('/disconnect', (req, res, next) => whatsappController.disconnect(req, res, next));
 
 export { router as whatsappRoutes };

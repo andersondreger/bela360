@@ -7,15 +7,17 @@ import { parseWebhookMessage } from './whatsapp.utils';
 import { AppError } from '../../common/errors';
 
 // Validation schemas
-const connectInstanceSchema = z.object({
-  businessId: z.string().cuid(),
-});
-
 const sendMessageSchema = z.object({
-  businessId: z.string().cuid(),
   phone: z.string().min(10),
   message: z.string().min(1).max(4096),
 });
+
+function requireSystemApiKey(req: Request): void {
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  if (apiKey !== env.EVOLUTION_API_KEY) {
+    throw new AppError('API key invalida', 401);
+  }
+}
 
 export class WhatsAppController {
   /**
@@ -61,7 +63,13 @@ export class WhatsAppController {
   /**
    * Get system instance status
    */
-  async getSystemStatus(_req: Request, res: Response, _next: NextFunction) {
+  async getSystemStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      requireSystemApiKey(req);
+    } catch (error) {
+      return next(error);
+    }
+
     try {
       const systemWhatsApp = getSystemWhatsAppService();
       const status = await systemWhatsApp.getInstanceStatus();
@@ -90,8 +98,9 @@ export class WhatsAppController {
   /**
    * Get system instance QR code
    */
-  async getSystemQRCode(_req: Request, res: Response, next: NextFunction) {
+  async getSystemQRCode(req: Request, res: Response, next: NextFunction) {
     try {
+      requireSystemApiKey(req);
       const systemWhatsApp = getSystemWhatsAppService();
       const qrcode = await systemWhatsApp.getQRCode();
 
@@ -109,7 +118,7 @@ export class WhatsAppController {
    */
   async connectInstance(req: Request, res: Response, next: NextFunction) {
     try {
-      const { businessId } = connectInstanceSchema.parse(req.body);
+      const businessId = req.user!.businessId;
 
       const business = await prisma.business.findUnique({
         where: { id: businessId },
@@ -167,7 +176,7 @@ export class WhatsAppController {
    */
   async getStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const { businessId } = req.params;
+      const businessId = req.user!.businessId;
 
       const business = await prisma.business.findUnique({
         where: { id: businessId },
@@ -198,7 +207,7 @@ export class WhatsAppController {
    */
   async getQRCode(req: Request, res: Response, next: NextFunction) {
     try {
-      const { businessId } = req.params;
+      const businessId = req.user!.businessId;
 
       const business = await prisma.business.findUnique({
         where: { id: businessId },
@@ -225,7 +234,8 @@ export class WhatsAppController {
    */
   async sendMessage(req: Request, res: Response, next: NextFunction) {
     try {
-      const { businessId, phone, message } = sendMessageSchema.parse(req.body);
+      const businessId = req.user!.businessId;
+      const { phone, message } = sendMessageSchema.parse(req.body);
 
       const business = await prisma.business.findUnique({
         where: { id: businessId },
@@ -269,7 +279,7 @@ export class WhatsAppController {
    */
   async disconnect(req: Request, res: Response, next: NextFunction) {
     try {
-      const { businessId } = req.params;
+      const businessId = req.user!.businessId;
 
       const business = await prisma.business.findUnique({
         where: { id: businessId },

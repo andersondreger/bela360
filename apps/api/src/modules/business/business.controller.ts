@@ -95,23 +95,6 @@ export class BusinessController {
   }
 
   /**
-   * Get business by ID
-   */
-  async getById(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { id } = req.params;
-      const business = await businessService.getById(id);
-
-      res.json({
-        success: true,
-        data: business,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
    * Update business
    */
   async update(req: Request, res: Response, next: NextFunction) {
@@ -189,9 +172,10 @@ export class BusinessController {
    */
   async updateProfessional(req: Request, res: Response, next: NextFunction) {
     try {
+      const businessId = req.user!.businessId;
       const { id } = req.params;
       const data = createProfessionalSchema.partial().parse(req.body);
-      const professional = await businessService.updateProfessional(id, data);
+      const professional = await businessService.updateProfessional(businessId, id, data);
 
       res.json({
         success: true,
@@ -207,8 +191,9 @@ export class BusinessController {
    */
   async removeProfessional(req: Request, res: Response, next: NextFunction) {
     try {
+      const businessId = req.user!.businessId;
       const { id } = req.params;
-      await businessService.removeProfessional(id);
+      await businessService.removeProfessional(businessId, id);
 
       res.json({
         success: true,

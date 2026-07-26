@@ -74,8 +74,9 @@ export class ClientsController {
    */
   async getById(req: Request, res: Response, next: NextFunction) {
     try {
+      const businessId = req.user!.businessId;
       const { id } = req.params;
-      const client = await clientsService.getById(id);
+      const client = await clientsService.getById(businessId, id);
 
       res.json({
         success: true,
@@ -91,9 +92,10 @@ export class ClientsController {
    */
   async update(req: Request, res: Response, next: NextFunction) {
     try {
+      const businessId = req.user!.businessId;
       const { id } = req.params;
       const data = updateClientSchema.parse(req.body);
-      const client = await clientsService.update(id, data);
+      const client = await clientsService.update(businessId, id, data);
 
       res.json({
         success: true,
@@ -109,8 +111,9 @@ export class ClientsController {
    */
   async delete(req: Request, res: Response, next: NextFunction) {
     try {
+      const businessId = req.user!.businessId;
       const { id } = req.params;
-      await clientsService.delete(id);
+      await clientsService.delete(businessId, id);
 
       res.json({
         success: true,

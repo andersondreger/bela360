@@ -6,7 +6,7 @@ const router: Router = Router();
 // Get professional profile
 router.get('/profile', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.userId;
 
     let profile = await prisma.professionalProfile.findUnique({
       where: { userId },
@@ -56,7 +56,7 @@ router.get('/profile', async (req: Request, res: Response) => {
 // Update professional profile
 router.put('/profile', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.userId;
     const data = req.body;
 
     const profile = await prisma.professionalProfile.update({
@@ -131,8 +131,8 @@ router.get('/public/:slug', async (req: Request, res: Response) => {
 // Get professional dashboard stats
 router.get('/dashboard', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
-    const businessId = (req as any).businessId;
+    const userId = req.user!.userId;
+    const businessId = req.user!.businessId;
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -220,7 +220,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
 // Get goals
 router.get('/goals', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.userId;
     const { month, year } = req.query;
 
     const m = month ? parseInt(month as string) : new Date().getMonth() + 1;
@@ -251,9 +251,21 @@ router.get('/goals', async (req: Request, res: Response) => {
 // Set goal (owner only)
 router.post('/goals/:userId', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    if (req.user!.role !== 'OWNER' && req.user!.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Apenas o proprietário pode definir metas' });
+    }
+
+    const businessId = req.user!.businessId;
     const { userId: targetUserId } = req.params;
     const data = req.body;
+
+    const targetUser = await prisma.user.findFirst({
+      where: { id: targetUserId, businessId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Profissional não encontrado' });
+    }
 
     const profile = await prisma.professionalProfile.findUnique({
       where: { userId: targetUserId },
@@ -296,7 +308,7 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
 // Get team ranking
 router.get('/ranking', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
     const { month, year } = req.query;
 
     const m = month ? parseInt(month as string) : new Date().getMonth() + 1;
@@ -323,7 +335,7 @@ router.get('/ranking', async (req: Request, res: Response) => {
 // Calculate and update rankings (cron job)
 router.post('/ranking/calculate', async (req: Request, res: Response) => {
   try {
-    const businessId = (req as any).businessId;
+    const businessId = req.user!.businessId;
     const { month, year } = req.body;
 
     const startOfMonth = new Date(year, month - 1, 1);
@@ -423,7 +435,7 @@ router.post('/ranking/calculate', async (req: Request, res: Response) => {
 // Get badges
 router.get('/badges', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.userId;
 
     const profile = await prisma.professionalProfile.findUnique({
       where: { userId },
@@ -436,11 +448,24 @@ router.get('/badges', async (req: Request, res: Response) => {
   }
 });
 
-// Award badge (system or owner)
+// Award badge (owner only)
 router.post('/badges/:userId', async (req: Request, res: Response) => {
   try {
+    if (req.user!.role !== 'OWNER' && req.user!.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Apenas o proprietário pode conceder badges' });
+    }
+
+    const businessId = req.user!.businessId;
     const { userId: targetUserId } = req.params;
     const data = req.body;
+
+    const targetUser = await prisma.user.findFirst({
+      where: { id: targetUserId, businessId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Profissional não encontrado' });
+    }
 
     const profile = await prisma.professionalProfile.findUnique({
       where: { userId: targetUserId },
@@ -471,7 +496,7 @@ router.post('/badges/:userId', async (req: Request, res: Response) => {
 // Respond to rating
 router.post('/ratings/:ratingId/respond', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.userId;
     const { ratingId } = req.params;
     const { response } = req.body;
 
@@ -529,7 +554,7 @@ router.post('/referral/:referralCode', async (req: Request, res: Response) => {
 // Get marketing links and info
 router.get('/marketing', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.userId;
 
     const profile = await prisma.professionalProfile.findUnique({
       where: { userId },
@@ -581,8 +606,8 @@ router.get('/marketing', async (req: Request, res: Response) => {
 // Get clients acquired by this professional
 router.get('/marketing/clients', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
-    const businessId = (req as any).businessId;
+    const userId = req.user!.userId;
+    const businessId = req.user!.businessId;
     const { period } = req.query;
 
     // Calculate date range
@@ -674,8 +699,8 @@ router.get('/marketing/clients', async (req: Request, res: Response) => {
 // Get marketing stats overview
 router.get('/marketing/stats', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
-    const businessId = (req as any).businessId;
+    const userId = req.user!.userId;
+    const businessId = req.user!.businessId;
 
     const now = new Date();
     const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -773,8 +798,8 @@ router.post('/public/:slug/view', async (_req: Request, res: Response) => {
 // Send promotional message to professional's clients
 router.post('/marketing/send', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
-    const businessId = (req as any).businessId;
+    const userId = req.user!.userId;
+    const businessId = req.user!.businessId;
     const { message, clientIds, templateId } = req.body;
 
     // Get business WhatsApp config

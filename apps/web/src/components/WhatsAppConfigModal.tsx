@@ -7,7 +7,6 @@ import { whatsappApi, WhatsAppStatus } from '@/lib/api';
 interface WhatsAppConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
-  businessId: string;
   onStatusChange?: (connected: boolean) => void;
 }
 
@@ -16,7 +15,6 @@ type ConnectionState = 'checking' | 'disconnected' | 'connecting' | 'connected' 
 export function WhatsAppConfigModal({
   isOpen,
   onClose,
-  businessId,
   onStatusChange,
 }: WhatsAppConfigModalProps) {
   const [state, setState] = useState<ConnectionState>('checking');
@@ -28,7 +26,7 @@ export function WhatsAppConfigModal({
     try {
       setState('checking');
       setError(null);
-      const result = await whatsappApi.getStatus(businessId);
+      const result = await whatsappApi.getStatus();
       setStatus(result);
       setState(result.connected ? 'connected' : 'disconnected');
       onStatusChange?.(result.connected);
@@ -37,13 +35,13 @@ export function WhatsAppConfigModal({
       setState('disconnected');
       setStatus(null);
     }
-  }, [businessId, onStatusChange]);
+  }, [onStatusChange]);
 
   useEffect(() => {
-    if (isOpen && businessId) {
+    if (isOpen) {
       checkStatus();
     }
-  }, [isOpen, businessId, checkStatus]);
+  }, [isOpen, checkStatus]);
 
   // Poll for status while connecting
   useEffect(() => {
@@ -51,7 +49,7 @@ export function WhatsAppConfigModal({
 
     const interval = setInterval(async () => {
       try {
-        const result = await whatsappApi.getStatus(businessId);
+        const result = await whatsappApi.getStatus();
         if (result.connected) {
           setState('connected');
           setStatus(result);
@@ -64,13 +62,13 @@ export function WhatsAppConfigModal({
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [state, businessId, onStatusChange]);
+  }, [state, onStatusChange]);
 
   const handleConnect = async () => {
     try {
       setState('connecting');
       setError(null);
-      const result = await whatsappApi.connect(businessId);
+      const result = await whatsappApi.connect();
       setQrCode(result.qrcode);
     } catch (err) {
       setState('error');
@@ -81,7 +79,7 @@ export function WhatsAppConfigModal({
   const handleDisconnect = async () => {
     try {
       setState('checking');
-      await whatsappApi.disconnect(businessId);
+      await whatsappApi.disconnect();
       setState('disconnected');
       setStatus(null);
       setQrCode(null);
@@ -94,7 +92,7 @@ export function WhatsAppConfigModal({
 
   const handleRefreshQR = async () => {
     try {
-      const result = await whatsappApi.getQRCode(businessId);
+      const result = await whatsappApi.getQRCode();
       setQrCode(result.qrcode);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao atualizar QR Code');

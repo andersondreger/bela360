@@ -36,6 +36,10 @@ export class ServicesService {
       throw new AppError('Já existe um serviço com este nome', 409);
     }
 
+    if (data.professionalIds?.length) {
+      await this.assertProfessionalsBelongTo(data.businessId, data.professionalIds);
+    }
+
     const service = await prisma.service.create({
       data: {
         businessId: data.businessId,
@@ -116,9 +120,9 @@ export class ServicesService {
   /**
    * Get service by ID
    */
-  async getById(id: string): Promise<any> {
-    const service = await prisma.service.findUnique({
-      where: { id },
+  async getById(businessId: string, id: string): Promise<any> {
+    const service = await prisma.service.findFirst({
+      where: { id, businessId },
       include: {
         professionals: {
           include: {
@@ -145,27 +149,32 @@ export class ServicesService {
   /**
    * Update service
    */
-  async update(id: string, data: UpdateServiceDTO): Promise<any> {
+  async update(businessId: string, id: string, data: UpdateServiceDTO): Promise<any> {
+    const existingService = await prisma.service.findFirst({ where: { id, businessId } });
+    if (!existingService) {
+      throw new AppError('Serviço não encontrado', 404);
+    }
+
     // Check if changing name and new name already exists
     if (data.name) {
-      const service = await prisma.service.findUnique({ where: { id } });
-      if (service) {
-        const existing = await prisma.service.findFirst({
-          where: {
-            businessId: service.businessId,
-            name: { equals: data.name, mode: 'insensitive' },
-            id: { not: id },
-          },
-        });
+      const existing = await prisma.service.findFirst({
+        where: {
+          businessId,
+          name: { equals: data.name, mode: 'insensitive' },
+          id: { not: id },
+        },
+      });
 
-        if (existing) {
-          throw new AppError('Já existe um serviço com este nome', 409);
-        }
+      if (existing) {
+        throw new AppError('Já existe um serviço com este nome', 409);
       }
     }
 
     // If updating professionals, delete existing and recreate
     if (data.professionalIds !== undefined) {
+      if (data.professionalIds.length) {
+        await this.assertProfessionalsBelongTo(businessId, data.professionalIds);
+      }
       await prisma.serviceProfessional.deleteMany({
         where: { serviceId: id },
       });
@@ -212,7 +221,12 @@ export class ServicesService {
   /**
    * Delete service (soft delete)
    */
-  async delete(id: string): Promise<void> {
+  async delete(businessId: string, id: string): Promise<void> {
+    const service = await prisma.service.findFirst({ where: { id, businessId } });
+    if (!service) {
+      throw new AppError('Serviço não encontrado', 404);
+    }
+
     await prisma.service.update({
       where: { id },
       data: { isActive: false },
@@ -222,11 +236,24 @@ export class ServicesService {
   }
 
   /**
+   * Throws if any of the given user ids don't belong to this business.
+   */
+  private async assertProfessionalsBelongTo(businessId: string, professionalIds: string[]): Promise<void> {
+    const count = await prisma.user.count({
+      where: { id: { in: professionalIds }, businessId },
+    });
+    if (count !== professionalIds.length) {
+      throw new AppError('Profissional não encontrado', 404);
+    }
+  }
+
+  /**
    * Get services by professional
    */
-  async getByProfessional(professionalId: string): Promise<any[]> {
+  async getByProfessional(businessId: string, professionalId: string): Promise<any[]> {
     const services = await prisma.service.findMany({
       where: {
+        businessId,
         isActive: true,
         professionals: {
           some: {
