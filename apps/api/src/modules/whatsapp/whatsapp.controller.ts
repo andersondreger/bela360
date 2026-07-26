@@ -12,6 +12,10 @@ const sendMessageSchema = z.object({
   message: z.string().min(1).max(4096),
 });
 
+const sendConversationMessageSchema = z.object({
+  message: z.string().min(1).max(4096),
+});
+
 function requireSystemApiKey(req: Request): void {
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
   if (apiKey !== env.EVOLUTION_API_KEY) {
@@ -473,6 +477,124 @@ export class WhatsAppController {
           ...(status === 'READ' && { readAt: new Date() }),
         },
       });
+    }
+  }
+
+  /**
+   * List conversations (one per client with messages), most recent first
+   */
+  async listConversations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+
+      const withMessages = await prisma.message.findMany({
+        where: { businessId, clientId: { not: null } },
+        select: { clientId: true },
+        distinct: ['clientId'],
+      });
+
+      const clientIds = withMessages.map(m => m.clientId as string);
+
+      const conversations = await Promise.all(
+        clientIds.map(async clientId => {
+          const [client, lastMessage, unreadCount] = await Promise.all([
+            prisma.client.findUnique({
+              where: { id: clientId },
+              select: { id: true, name: true, phone: true },
+            }),
+            prisma.message.findFirst({
+              where: { businessId, clientId },
+              orderBy: { createdAt: 'desc' },
+            }),
+            prisma.message.count({
+              where: { businessId, clientId, direction: 'INBOUND', readAt: null },
+            }),
+          ]);
+
+          return { client, lastMessage, unreadCount };
+        })
+      );
+
+      conversations.sort((a, b) => {
+        const aTime = a.lastMessage?.createdAt?.getTime() ?? 0;
+        const bTime = b.lastMessage?.createdAt?.getTime() ?? 0;
+        return bTime - aTime;
+      });
+
+      res.json({ success: true, data: conversations.filter(c => c.client) });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get message history with a client (marks inbound messages as read)
+   */
+  async getConversationMessages(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const { clientId } = req.params;
+
+      const client = await prisma.client.findFirst({ where: { id: clientId, businessId } });
+      if (!client) {
+        throw new AppError('Cliente não encontrado', 404);
+      }
+
+      const messages = await prisma.message.findMany({
+        where: { businessId, clientId },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+      });
+
+      await prisma.message.updateMany({
+        where: { businessId, clientId, direction: 'INBOUND', readAt: null },
+        data: { readAt: new Date(), status: 'READ' },
+      });
+
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Send a message within a client conversation thread
+   */
+  async sendConversationMessage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const { clientId } = req.params;
+      const { message } = sendConversationMessageSchema.parse(req.body);
+
+      const client = await prisma.client.findFirst({ where: { id: clientId, businessId } });
+      if (!client) {
+        throw new AppError('Cliente não encontrado', 404);
+      }
+
+      const business = await prisma.business.findUnique({ where: { id: businessId } });
+      if (!business?.whatsappInstanceId || !business.whatsappConnected) {
+        throw new AppError('WhatsApp não conectado', 400);
+      }
+
+      const whatsapp = getWhatsAppService(business.whatsappInstanceId);
+      await whatsapp.sendText({ number: client.phone, text: message });
+
+      const created = await prisma.message.create({
+        data: {
+          businessId,
+          clientId,
+          remoteJid: client.phone,
+          direction: 'OUTBOUND',
+          content: message,
+          status: 'SENT',
+          sentAt: new Date(),
+          isFromBot: false,
+        },
+      });
+
+      res.json({ success: true, data: created });
+    } catch (error) {
+      next(error);
     }
   }
 }

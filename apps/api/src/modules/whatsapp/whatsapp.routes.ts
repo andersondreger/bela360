@@ -30,4 +30,9 @@ router.post('/send', (req, res, next) => whatsappController.sendMessage(req, res
 // Disconnect
 router.post('/disconnect', (req, res, next) => whatsappController.disconnect(req, res, next));
 
+// Conversations inbox
+router.get('/conversations', (req, res, next) => whatsappController.listConversations(req, res, next));
+router.get('/conversations/:clientId/messages', (req, res, next) => whatsappController.getConversationMessages(req, res, next));
+router.post('/conversations/:clientId/messages', (req, res, next) => whatsappController.sendConversationMessage(req, res, next));
+
 export { router as whatsappRoutes };

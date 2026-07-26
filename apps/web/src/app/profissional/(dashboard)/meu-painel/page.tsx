@@ -9,10 +9,13 @@ import {
   Clock,
   Star,
   ChevronRight,
+  AlertCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton, SkeletonCard, SkeletonList } from '@/components/Skeleton';
 import { PageHeader, Badge } from '@/components/ui';
+import { professionalApi, appointmentsApi, type Appointment, type AppointmentStatus } from '@/lib/api';
+import { fetchCurrentUser } from '@/lib/auth';
 
 interface DashboardStats {
   todayAppointments: number;
@@ -33,7 +36,7 @@ interface TodayAppointment {
   time: string;
   clientName: string;
   serviceName: string;
-  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED';
+  status: AppointmentStatus;
 }
 
 function StatCard({
@@ -61,6 +64,19 @@ function StatCard({
   );
 }
 
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday as first day
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function toDateKey(date: Date | string): string {
+  return new Date(date).toISOString().split('T')[0];
+}
+
 export default function ProfessionalDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     todayAppointments: 0,
@@ -72,32 +88,80 @@ export default function ProfessionalDashboardPage() {
   });
   const [todaySchedule, setTodaySchedule] = useState<TodayAppointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulated data - in production would fetch from API
-    setStats({
-      todayAppointments: 5,
-      weekAppointments: 18,
-      monthRevenue: 4850,
-      pendingCommission: 1455,
-      totalClients: 127,
-      averageRating: 4.8,
-      nextAppointment: {
-        clientName: 'Maria Silva',
-        serviceName: 'Corte e Escova',
-        time: '14:30',
-      },
-    });
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
 
-    setTodaySchedule([
-      { id: '1', time: '09:00', clientName: 'Ana Paula', serviceName: 'Corte Feminino', status: 'COMPLETED' },
-      { id: '2', time: '10:00', clientName: 'Carlos Lima', serviceName: 'Corte Masculino', status: 'COMPLETED' },
-      { id: '3', time: '11:00', clientName: 'Juliana Costa', serviceName: 'Escova', status: 'CONFIRMED' },
-      { id: '4', time: '14:30', clientName: 'Maria Silva', serviceName: 'Corte e Escova', status: 'PENDING' },
-      { id: '5', time: '16:00', clientName: 'Fernanda Souza', serviceName: 'Coloracao', status: 'CONFIRMED' },
-    ]);
+        const user = await fetchCurrentUser();
+        if (!user) {
+          throw new Error('Sessão expirada');
+        }
 
-    setLoading(false);
+        const now = new Date();
+        const weekStart = startOfWeek(now);
+        const todayKey = toDateKey(now);
+
+        const [dashboard, marketingStats, weekAppointments] = await Promise.all([
+          professionalApi.getDashboard(),
+          professionalApi.getMarketingStats().catch(() => null),
+          appointmentsApi
+            .list({
+              professionalId: user.id,
+              startDate: weekStart.toISOString(),
+              endDate: now.toISOString(),
+            })
+            .catch(() => [] as Appointment[]),
+        ]);
+
+        const activeWeekAppointments = weekAppointments.filter(a => a.status !== 'CANCELLED');
+        const todayAppointments = activeWeekAppointments
+          .filter(a => toDateKey(a.startTime) === todayKey)
+          .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+        const upcoming = todayAppointments.find(
+          a => (a.status === 'PENDING' || a.status === 'CONFIRMED') && new Date(a.startTime).getTime() >= now.getTime()
+        );
+
+        setStats({
+          todayAppointments: todayAppointments.length,
+          weekAppointments: activeWeekAppointments.length,
+          monthRevenue: Number(dashboard.thisMonth.revenue) || 0,
+          pendingCommission: Number(dashboard.thisMonth.commission) || 0,
+          totalClients: marketingStats?.allTime?.totalClients ?? dashboard.thisMonth.uniqueClients,
+          averageRating: Number(dashboard.ratings.average) || 0,
+          nextAppointment: upcoming
+            ? {
+                clientName: upcoming.client?.name || 'Cliente',
+                serviceName: upcoming.service?.name || 'Servico',
+                time: new Date(upcoming.startTime).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              }
+            : undefined,
+        });
+
+        setTodaySchedule(
+          todayAppointments.map(a => ({
+            id: a.id,
+            time: new Date(a.startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            clientName: a.client?.name || 'Cliente',
+            serviceName: a.service?.name || 'Servico',
+            status: a.status,
+          }))
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar painel');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
   }, []);
 
   const formatCurrency = (value: number) => {
@@ -125,6 +189,10 @@ export default function ProfessionalDashboardPage() {
         return 'Confirmado';
       case 'PENDING':
         return 'Aguardando';
+      case 'CANCELLED':
+        return 'Cancelado';
+      case 'NO_SHOW':
+        return 'Nao compareceu';
       default:
         return status;
     }
@@ -158,6 +226,21 @@ export default function ProfessionalDashboardPage() {
 
         {/* List skeleton */}
         <SkeletonList count={4} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Meu Painel" description="Acompanhe seu desempenho e agenda" />
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 dark:border-red-500/20 dark:bg-red-500/10">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <AlertCircle className="h-5 w-5" />
+            <span className="font-medium">Erro ao carregar painel</span>
+          </div>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400/80">{error}</p>
+        </div>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Star,
@@ -20,6 +20,7 @@ import {
   Select,
   Textarea,
 } from '@/components/ui';
+import { marketingApi, isPremiumLockedError } from '@/lib/api';
 
 interface Campaign {
   id: string;
@@ -40,6 +41,11 @@ interface SegmentOverview {
   birthdayMonth: number;
 }
 
+interface RatingStatsResponse {
+  averageRating: number;
+  totalRatings: number;
+}
+
 const segmentInfo = {
   ALL: { name: 'Todos', icon: Users, color: 'bg-gray-100 text-gray-600' },
   VIP: { name: 'VIP', icon: Crown, color: 'bg-yellow-100 text-yellow-600' },
@@ -51,19 +57,22 @@ const segmentInfo = {
 
 const statusLabels: Record<
   string,
-  { label: string; variant: 'outline' | 'info' | 'warning' | 'success' }
+  { label: string; variant: 'outline' | 'info' | 'warning' | 'success' | 'destructive' }
 > = {
   DRAFT: { label: 'Rascunho', variant: 'outline' },
   SCHEDULED: { label: 'Agendada', variant: 'info' },
   SENDING: { label: 'Enviando', variant: 'warning' },
   COMPLETED: { label: 'Concluída', variant: 'success' },
+  CANCELLED: { label: 'Cancelada', variant: 'destructive' },
 };
 
 export default function MarketingPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [segments, setSegments] = useState<SegmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [ratingStats, setRatingStats] = useState({ average: 4.7, total: 156 });
+  const [locked, setLocked] = useState(false);
+  const [error, setError] = useState('');
+  const [ratingStats, setRatingStats] = useState({ average: 0, total: 0 });
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -73,47 +82,36 @@ export default function MarketingPage() {
   });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    // Simulated data - replace with API call
-    setCampaigns([
-      {
-        id: '1',
-        name: 'Promoção de Janeiro',
-        status: 'COMPLETED',
-        segmentType: 'ALL',
-        totalRecipients: 250,
-        sentCount: 248,
-        createdAt: '2026-01-02',
-      },
-      {
-        id: '2',
-        name: 'Reativação Clientes Inativos',
-        status: 'SENDING',
-        segmentType: 'INACTIVE',
-        totalRecipients: 45,
-        sentCount: 23,
-        createdAt: '2026-01-04',
-      },
-      {
-        id: '3',
-        name: 'Aniversariantes do Mês',
-        status: 'SCHEDULED',
-        segmentType: 'BIRTHDAY_MONTH',
-        totalRecipients: 12,
-        sentCount: 0,
-        createdAt: '2026-01-05',
-      },
-    ]);
-    setSegments({
-      all: 450,
-      new: 32,
-      loyal: 87,
-      inactive: 45,
-      vip: 23,
-      birthdayMonth: 12,
-    });
-    setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setLocked(false);
+    try {
+      const [campaignsData, segmentsData, ratingData] = await Promise.all([
+        marketingApi.listCampaigns(),
+        marketingApi.getSegments(),
+        marketingApi.getRatingStats() as Promise<RatingStatsResponse>,
+      ]);
+      setCampaigns(campaignsData);
+      setSegments(segmentsData);
+      setRatingStats({
+        average: ratingData?.averageRating || 0,
+        total: ratingData?.totalRatings || 0,
+      });
+    } catch (err) {
+      if (isPremiumLockedError(err)) {
+        setLocked(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar dados de marketing');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleCloseModal = () => {
     setShowNewCampaign(false);
@@ -141,28 +139,59 @@ export default function MarketingPage() {
     }
 
     setSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const payload: Record<string, unknown> = {
+        name: formData.name,
+        message: formData.message,
+        segmentType: formData.segmentType,
+      };
+      if (formData.scheduledDate) {
+        payload.scheduledFor = new Date(formData.scheduledDate).toISOString();
+      }
 
-    const newCampaign: Campaign = {
-      id: Date.now().toString(),
-      name: formData.name,
-      status: formData.scheduledDate ? 'SCHEDULED' : 'SENDING',
-      segmentType: formData.segmentType,
-      totalRecipients: getRecipientCount(formData.segmentType),
-      sentCount: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+      const campaign = await marketingApi.createCampaign(payload);
+      if (!formData.scheduledDate) {
+        await marketingApi.startCampaign(campaign.id);
+      }
 
-    setCampaigns(prev => [newCampaign, ...prev]);
-    handleCloseModal();
-    setSaving(false);
-    alert(formData.scheduledDate ? 'Campanha agendada com sucesso!' : 'Campanha iniciada!');
+      await loadData();
+      handleCloseModal();
+      alert(formData.scheduledDate ? 'Campanha agendada com sucesso!' : 'Campanha iniciada!');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao criar campanha');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Marketing"
+          description="Campanhas, segmentação de clientes e avaliações"
+        />
+        <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-bela-gold via-amber-500 to-orange-500 text-white">
+            <Crown className="h-7 w-7" />
+          </div>
+          <h2 className="text-lg font-semibold">Este é um recurso premium</h2>
+          <p className="mt-2 max-w-md mx-auto text-muted-foreground">
+            Este recurso faz parte do plano premium do bela360. Peça um cupom de desbloqueio em{' '}
+            <a href="/configuracoes" className="font-medium text-primary hover:underline">
+              Configurações &gt; Plano
+            </a>
+            .
+          </p>
+        </div>
       </div>
     );
   }
@@ -180,6 +209,12 @@ export default function MarketingPage() {
         }
       />
 
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Rating Stats */}
       <div className="noise-overlay rounded-2xl bg-gradient-to-r from-bela-gold via-amber-500 to-orange-500 p-6 text-white shadow-glow">
         <div className="flex items-center justify-between">
@@ -187,7 +222,7 @@ export default function MarketingPage() {
             <p className="text-white/80">Avaliação Média</p>
             <div className="flex items-center gap-2 mt-1">
               <Star className="h-8 w-8 fill-white" />
-              <span className="text-4xl font-bold">{ratingStats.average}</span>
+              <span className="text-4xl font-bold">{ratingStats.average.toFixed(1)}</span>
               <span className="text-white/80">/ 5.0</span>
             </div>
             <p className="text-sm text-white/80 mt-1">
@@ -261,7 +296,7 @@ export default function MarketingPage() {
                         <div className={`p-1 rounded ${segment?.color}`}>
                           <SegmentIcon className="h-4 w-4" />
                         </div>
-                        <span className="text-sm">{segment?.name}</span>
+                        <span className="text-sm">{segment?.name || campaign.segmentType}</span>
                       </div>
                     </td>
                     <td className="p-4">
@@ -283,7 +318,7 @@ export default function MarketingPage() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <Badge variant={status?.variant || 'outline'}>{status?.label}</Badge>
+                      <Badge variant={status?.variant || 'outline'}>{status?.label || campaign.status}</Badge>
                     </td>
                   </tr>
                 );

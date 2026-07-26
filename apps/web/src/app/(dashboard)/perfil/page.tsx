@@ -13,98 +13,84 @@ import {
   Medal,
   Share2,
   Instagram,
+  AlertCircle,
 } from 'lucide-react';
 import { Button, Card, CardContent, Badge as UiBadge, PageHeader } from '@/components/ui';
-
-interface ProfileStats {
-  thisMonth: {
-    appointments: number;
-    revenue: number;
-    commission: number;
-    uniqueClients: number;
-  };
-  ratings: {
-    average: number;
-    total: number;
-  };
-  ranking: {
-    position: number;
-    totalProfessionals: number;
-  } | null;
-}
-
-interface Goal {
-  id: string;
-  type: string;
-  targetValue: number;
-  currentValue: number;
-  bonusAmount?: number;
-}
-
-interface Badge {
-  id: string;
-  type: string;
-  name: string;
-  description: string;
-  iconUrl?: string;
-  earnedAt: string;
-}
-
-interface LoyalClient {
-  id: string;
-  name: string;
-  visits: number;
-}
+import {
+  professionalApi,
+  isPremiumLockedError,
+  type ProfessionalDashboard,
+  type ProfessionalBadge,
+} from '@/lib/api';
 
 export default function PerfilPage() {
-  const [stats, setStats] = useState<ProfileStats | null>(null);
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [badges, setBadges] = useState<Badge[]>([]);
-  const [loyalClients, setLoyalClients] = useState<LoyalClient[]>([]);
+  const [dashboard, setDashboard] = useState<ProfessionalDashboard | null>(null);
+  const [badges, setBadges] = useState<ProfessionalBadge[]>([]);
+  const [totalProfessionals, setTotalProfessionals] = useState(0);
+  const [profileLink, setProfileLink] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [sharing, setSharing] = useState(false);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulated data - replace with API call
-    setStats({
-      thisMonth: {
-        appointments: 42,
-        revenue: 8750.00,
-        commission: 2625.00,
-        uniqueClients: 28,
-      },
-      ratings: {
-        average: 4.8,
-        total: 156,
-      },
-      ranking: {
-        position: 2,
-        totalProfessionals: 8,
-      },
-    });
-    setGoals([
-      { id: '1', type: 'REVENUE', targetValue: 10000, currentValue: 8750, bonusAmount: 200 },
-      { id: '2', type: 'APPOINTMENTS', targetValue: 50, currentValue: 42 },
-      { id: '3', type: 'NEW_CLIENTS', targetValue: 10, currentValue: 6 },
-    ]);
-    setBadges([
-      { id: '1', type: 'TOP_RATED', name: 'Avaliacao Perfeita', description: '5 estrelas em 10 avaliacoes consecutivas', earnedAt: '2026-01-01' },
-      { id: '2', type: 'HIGH_EARNER', name: 'Top Vendedor', description: 'Maior faturamento do mes', earnedAt: '2025-12-01' },
-      { id: '3', type: 'LOYALTY_MASTER', name: 'Fidelizador', description: '20 clientes que retornaram 3x ou mais', earnedAt: '2025-11-15' },
-    ]);
-    setLoyalClients([
-      { id: '1', name: 'Maria Silva', visits: 12 },
-      { id: '2', name: 'Ana Costa', visits: 8 },
-      { id: '3', name: 'Julia Santos', visits: 7 },
-      { id: '4', name: 'Carla Oliveira', visits: 6 },
-    ]);
-    setLoading(false);
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [dash, badgeList, ranking, marketing] = await Promise.all([
+          professionalApi.getDashboard(),
+          professionalApi.getBadges(),
+          professionalApi.getRanking().catch(() => []),
+          professionalApi.getMarketing().catch(() => null),
+        ]);
+
+        setDashboard(dash);
+        setBadges(badgeList);
+        setTotalProfessionals(ranking.length);
+        setProfileLink(marketing?.links?.profileLink || null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar perfil');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
   }, []);
+
+  const handleShare = async () => {
+    setSharing(true);
+    setShareMessage(null);
+    setShareError(null);
+    try {
+      const result = await professionalApi.sendMarketing({
+        message: profileLink
+          ? `Confira meu perfil no bela360 e agende seu horário: ${profileLink}`
+          : undefined,
+      });
+      setShareMessage(result?.message || 'Perfil compartilhado com seus clientes!');
+    } catch (err) {
+      if (isPremiumLockedError(err)) {
+        setShareError(
+          'Este recurso faz parte do plano premium do bela360. Peça um cupom de desbloqueio em Configurações > Plano.'
+        );
+      } else {
+        setShareError(err instanceof Error ? err.message : 'Erro ao compartilhar perfil');
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
-    }).format(value);
+    }).format(Number(value) || 0);
   };
 
   const goalLabels: Record<string, string> = {
@@ -112,10 +98,15 @@ export default function PerfilPage() {
     APPOINTMENTS: 'Atendimentos',
     NEW_CLIENTS: 'Novos Clientes',
     RATING: 'Avaliacao Media',
+    RETURN_RATE: 'Taxa de Retorno',
   };
 
-  const getProgressColor = (current: number, target: number) => {
-    const percentage = (current / target) * 100;
+  const getProgress = (current: number, target: number) => {
+    if (!target || target <= 0) return 0;
+    return Math.min((Number(current) / Number(target)) * 100, 100);
+  };
+
+  const getProgressColor = (percentage: number) => {
     if (percentage >= 100) return 'bg-emerald-500';
     if (percentage >= 75) return 'bg-blue-500';
     if (percentage >= 50) return 'bg-amber-500';
@@ -130,6 +121,27 @@ export default function PerfilPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Meu Perfil Profissional" description="Acompanhe seu desempenho, metas e conquistas" />
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 dark:border-red-500/20 dark:bg-red-500/10">
+          <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <AlertCircle className="h-5 w-5" />
+            <span className="font-medium">Erro ao carregar perfil</span>
+          </div>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400/80">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const ranking = dashboard?.ranking
+    ? { position: dashboard.ranking.position ?? 0, totalProfessionals }
+    : null;
+  const goals = dashboard?.goals || [];
+  const loyalClients = dashboard?.loyalClients || [];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -137,7 +149,7 @@ export default function PerfilPage() {
         description="Acompanhe seu desempenho, metas e conquistas"
         actions={
           <>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleShare} loading={sharing}>
               <Share2 className="h-4 w-4" />
               Compartilhar Perfil
             </Button>
@@ -149,8 +161,19 @@ export default function PerfilPage() {
         }
       />
 
+      {shareMessage && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+          {shareMessage}
+        </div>
+      )}
+      {shareError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {shareError}
+        </div>
+      )}
+
       {/* Ranking Banner */}
-      {stats?.ranking && (
+      {ranking && (
         <div className="bg-gradient-brand text-white rounded-2xl p-6 flex items-center justify-between shadow-glow">
           <div className="flex items-center gap-4">
             <div className="p-4 bg-white/20 rounded-full">
@@ -158,12 +181,12 @@ export default function PerfilPage() {
             </div>
             <div>
               <p className="text-lg opacity-90">Ranking do Mes</p>
-              <p className="text-4xl font-bold">#{stats.ranking.position}</p>
+              <p className="text-4xl font-bold">#{ranking.position}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-sm opacity-75">de {stats.ranking.totalProfessionals} profissionais</p>
-            {stats.ranking.position <= 3 && (
+            <p className="text-sm opacity-75">de {ranking.totalProfessionals} profissionais</p>
+            {ranking.position > 0 && ranking.position <= 3 && (
               <UiBadge className="mt-2 gap-1 bg-white/20 text-white">
                 <Medal className="h-4 w-4" />
                 Top 3 do Salao!
@@ -181,7 +204,7 @@ export default function PerfilPage() {
               <p className="text-sm text-muted-foreground">Atendimentos</p>
               <Calendar className="h-4 w-4 text-blue-500" />
             </div>
-            <p className="text-2xl font-bold">{stats?.thisMonth.appointments}</p>
+            <p className="text-2xl font-bold">{dashboard?.thisMonth.appointments ?? 0}</p>
             <p className="text-xs text-muted-foreground mt-1">este mes</p>
           </CardContent>
         </Card>
@@ -193,7 +216,7 @@ export default function PerfilPage() {
               <DollarSign className="h-4 w-4 text-emerald-500" />
             </div>
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(stats?.thisMonth.revenue || 0)}
+              {formatCurrency(dashboard?.thisMonth.revenue || 0)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">este mes</p>
           </CardContent>
@@ -206,7 +229,7 @@ export default function PerfilPage() {
               <TrendingUp className="h-4 w-4 text-primary" />
             </div>
             <p className="text-2xl font-bold text-primary">
-              {formatCurrency(stats?.thisMonth.commission || 0)}
+              {formatCurrency(dashboard?.thisMonth.commission || 0)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">a receber</p>
           </CardContent>
@@ -219,9 +242,9 @@ export default function PerfilPage() {
               <Star className="h-4 w-4 text-amber-500" />
             </div>
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {stats?.ratings.average.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5</span>
+              {Number(dashboard?.ratings.average || 0).toFixed(1)} <span className="text-sm font-normal text-muted-foreground">/ 5</span>
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{stats?.ratings.total} avaliacoes</p>
+            <p className="text-xs text-muted-foreground mt-1">{dashboard?.ratings.total ?? 0} avaliacoes</p>
           </CardContent>
         </Card>
       </div>
@@ -236,14 +259,14 @@ export default function PerfilPage() {
             </h2>
             <div className="space-y-4">
               {goals.map((goal) => {
-                const percentage = Math.min((goal.currentValue / goal.targetValue) * 100, 100);
+                const percentage = getProgress(goal.currentValue, goal.targetValue);
                 const isMonetary = goal.type === 'REVENUE';
 
                 return (
                   <div key={goal.id} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{goalLabels[goal.type]}</span>
+                        <span className="font-medium">{goalLabels[goal.type] || goal.type}</span>
                         {goal.bonusAmount && (
                           <UiBadge variant="success">
                             +{formatCurrency(goal.bonusAmount)} bonus
@@ -251,12 +274,12 @@ export default function PerfilPage() {
                         )}
                       </div>
                       <span className="text-sm">
-                        {isMonetary ? formatCurrency(goal.currentValue) : goal.currentValue} / {isMonetary ? formatCurrency(goal.targetValue) : goal.targetValue}
+                        {isMonetary ? formatCurrency(goal.currentValue) : Number(goal.currentValue)} / {isMonetary ? formatCurrency(goal.targetValue) : Number(goal.targetValue)}
                       </span>
                     </div>
                     <div className="h-3 bg-muted rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${getProgressColor(goal.currentValue, goal.targetValue)}`}
+                        className={`h-full rounded-full transition-all ${getProgressColor(percentage)}`}
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -266,6 +289,10 @@ export default function PerfilPage() {
                   </div>
                 );
               })}
+
+              {goals.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhuma meta definida para este mes.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -294,6 +321,10 @@ export default function PerfilPage() {
                   <span className="text-sm text-muted-foreground">{client.visits} visitas</span>
                 </div>
               ))}
+
+              {loyalClients.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum cliente recorrente ainda.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -321,7 +352,7 @@ export default function PerfilPage() {
             ))}
 
             {/* Placeholder for locked badges */}
-            {[1, 2, 3].map((i) => (
+            {Array.from({ length: Math.max(3 - badges.length, 0) }).map((_, i) => (
               <div
                 key={`locked-${i}`}
                 className="flex flex-col items-center p-4 bg-muted/30 rounded-2xl text-center opacity-50"

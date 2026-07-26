@@ -1,17 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Zap, MessageSquare, Gift, UserX, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Zap, MessageSquare, Gift, UserX, Clock, ToggleLeft, ToggleRight, Crown, Send, CheckCircle2, TrendingUp } from 'lucide-react';
 import { Card, CardContent, Badge, PageHeader } from '@/components/ui';
+import { automationApi, isPremiumLockedError } from '@/lib/api';
 
 interface Automation {
   id: string;
   type: string;
   template: string;
   isActive: boolean;
-  delayHours?: number;
-  delayDays?: number;
-  sendTime?: string;
+  delayHours?: number | null;
+  delayDays?: number | null;
+  sendTime?: string | null;
+}
+
+interface AutomationStats {
+  automations: number;
+  activeAutomations: number;
+  totalSent: number;
+  totalConverted: number;
+  conversionRate: number;
 }
 
 const automationTypes = {
@@ -24,56 +33,85 @@ const automationTypes = {
 export default function AutomacaoPage() {
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ sent: 0, pending: 0, failed: 0 });
+  const [locked, setLocked] = useState(false);
+  const [error, setError] = useState('');
+  const [stats, setStats] = useState<AutomationStats>({
+    automations: 0,
+    activeAutomations: 0,
+    totalSent: 0,
+    totalConverted: 0,
+    conversionRate: 0,
+  });
 
-  useEffect(() => {
-    // Simulated data - replace with API call
-    setAutomations([
-      {
-        id: '1',
-        type: 'POST_APPOINTMENT',
-        template: 'Olá {{nome}}! Obrigado pela visita hoje. Como foi seu {{servico}}? Avalie de 1 a 5',
-        isActive: true,
-        delayHours: 2,
-      },
-      {
-        id: '2',
-        type: 'RETURN_REMINDER',
-        template: 'Oi {{nome}}! Já faz {{dias}} dias desde seu último {{servico}}. Que tal agendar?',
-        isActive: false,
-        delayDays: 30,
-        sendTime: '10:00',
-      },
-      {
-        id: '3',
-        type: 'BIRTHDAY',
-        template: 'Feliz aniversário, {{nome}}! Como presente, preparamos algo especial para você...',
-        isActive: true,
-        sendTime: '09:00',
-      },
-      {
-        id: '4',
-        type: 'REACTIVATION',
-        template: 'Oi {{nome}}, sentimos sua falta! Faz tempo que não nos vemos. Que tal voltar?',
-        isActive: false,
-        delayDays: 60,
-        sendTime: '10:00',
-      },
-    ]);
-    setStats({ sent: 156, pending: 12, failed: 3 });
-    setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setLocked(false);
+    try {
+      const [statsData, automationsData] = await Promise.all([
+        automationApi.getStats() as Promise<AutomationStats>,
+        automationApi.list() as Promise<Automation[]>,
+      ]);
+      setStats(statsData);
+      setAutomations(automationsData);
+    } catch (err) {
+      if (isPremiumLockedError(err)) {
+        setLocked(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar automações');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const toggleAutomation = (id: string) => {
-    setAutomations(prev =>
-      prev.map(a => (a.id === id ? { ...a, isActive: !a.isActive } : a))
-    );
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const toggleAutomation = async (id: string) => {
+    const previous = automations;
+    setAutomations(prev => prev.map(a => (a.id === id ? { ...a, isActive: !a.isActive } : a)));
+    try {
+      await automationApi.toggle(id);
+    } catch (err) {
+      setAutomations(previous);
+      if (isPremiumLockedError(err)) {
+        setLocked(true);
+      } else {
+        alert(err instanceof Error ? err.message : 'Erro ao atualizar automação');
+      }
+    }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Automação de Relacionamento"
+          description="Configure mensagens automáticas para engajar seus clientes"
+        />
+        <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-bela-gold via-amber-500 to-orange-500 text-white">
+            <Crown className="h-7 w-7" />
+          </div>
+          <h2 className="text-lg font-semibold">Este é um recurso premium</h2>
+          <p className="mt-2 max-w-md mx-auto text-muted-foreground">
+            Este recurso faz parte do plano premium do bela360. Peça um cupom de desbloqueio em{' '}
+            <a href="/configuracoes" className="font-medium text-primary hover:underline">
+              Configurações &gt; Plano
+            </a>
+            .
+          </p>
+        </div>
       </div>
     );
   }
@@ -85,24 +123,39 @@ export default function AutomacaoPage() {
         description="Configure mensagens automáticas para engajar seus clientes"
       />
 
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Mensagens Enviadas</p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.sent}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Mensagens Enviadas</p>
+              <Send className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.totalSent}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Pendentes</p>
-            <p className="text-2xl font-bold text-amber-500">{stats.pending}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Convertidas em Agendamento</p>
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold text-amber-500">{stats.totalConverted}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Falhas</p>
-            <p className="text-2xl font-bold text-red-500">{stats.failed}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Taxa de Conversão</p>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-bold text-primary">{stats.conversionRate.toFixed(1)}%</p>
           </CardContent>
         </Card>
       </div>
@@ -134,10 +187,10 @@ export default function AutomacaoPage() {
                     </div>
                     <p className="text-sm text-muted-foreground">{automation.template}</p>
                     <div className="flex gap-4 text-xs text-muted-foreground">
-                      {automation.delayHours && (
+                      {!!automation.delayHours && (
                         <span>Enviar após: {automation.delayHours}h</span>
                       )}
-                      {automation.delayDays && (
+                      {!!automation.delayDays && (
                         <span>Enviar após: {automation.delayDays} dias</span>
                       )}
                       {automation.sendTime && (
@@ -162,6 +215,12 @@ export default function AutomacaoPage() {
             </Card>
           );
         })}
+
+        {automations.length === 0 && (
+          <div className="p-8 text-center text-muted-foreground rounded-2xl border border-border bg-card">
+            Nenhuma automação configurada ainda
+          </div>
+        )}
       </div>
     </div>
   );

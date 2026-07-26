@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Gift,
   Star,
@@ -12,6 +12,7 @@ import {
   Target,
 } from 'lucide-react';
 import { Button, Card, CardContent, Badge, Modal, Input, Textarea, Select, PageHeader } from '@/components/ui';
+import { loyaltyApi, isPremiumLockedError } from '@/lib/api';
 
 interface LoyaltyStats {
   totalClients: number;
@@ -25,10 +26,17 @@ interface LoyaltyStats {
   };
 }
 
+interface LoyaltyProgramData {
+  pointsPerReal: number | string;
+  silverThreshold: number;
+  goldThreshold: number;
+  diamondThreshold: number;
+}
+
 interface Reward {
   id: string;
   name: string;
-  description: string;
+  description?: string | null;
   pointsCost: number;
   type: string;
   totalRedemptions: number;
@@ -43,11 +51,26 @@ interface Redemption {
   client: { name: string };
 }
 
+interface LoyaltyStatsResponse {
+  program: LoyaltyProgramData | null;
+  stats: {
+    totalClients: number;
+    totalPointsActive: number;
+    totalPointsEarned: number;
+    totalPointsRedeemed: number;
+  };
+  tierDistribution: Partial<Record<'BRONZE' | 'SILVER' | 'GOLD' | 'DIAMOND', number>>;
+  recentRedemptions: Redemption[];
+}
+
 export default function FidelidadePage() {
   const [stats, setStats] = useState<LoyaltyStats | null>(null);
+  const [program, setProgram] = useState<LoyaltyProgramData | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [recentRedemptions, setRecentRedemptions] = useState<Redemption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(false);
+  const [error, setError] = useState('');
   const [showNewReward, setShowNewReward] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -58,30 +81,44 @@ export default function FidelidadePage() {
   });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    // Simulated data - replace with API call
-    setStats({
-      totalClients: 156,
-      totalPointsActive: 48500,
-      totalPointsRedeemed: 12300,
-      tierDistribution: {
-        BRONZE: 89,
-        SILVER: 42,
-        GOLD: 18,
-        DIAMOND: 7,
-      },
-    });
-    setRewards([
-      { id: '1', name: 'Desconto 10%', description: 'Em qualquer servico', pointsCost: 100, type: 'DISCOUNT_PERCENT', totalRedemptions: 45 },
-      { id: '2', name: 'Hidratacao Gratis', description: 'Hidratacao capilar', pointsCost: 250, type: 'FREE_SERVICE', totalRedemptions: 28 },
-      { id: '3', name: 'R$50 OFF', description: 'Em servicos acima de R$150', pointsCost: 500, type: 'DISCOUNT_AMOUNT', totalRedemptions: 12 },
-    ]);
-    setRecentRedemptions([
-      { id: '1', couponCode: 'BL8K2X', pointsUsed: 100, createdAt: '2026-01-05T10:30:00', reward: { name: 'Desconto 10%' }, client: { name: 'Maria Silva' } },
-      { id: '2', couponCode: 'BL9Y3Z', pointsUsed: 250, createdAt: '2026-01-04T15:45:00', reward: { name: 'Hidratacao Gratis' }, client: { name: 'Ana Costa' } },
-    ]);
-    setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLocked(false);
+    setError('');
+    try {
+      const [statsResp, rewardsList] = await Promise.all([
+        loyaltyApi.getStats() as Promise<LoyaltyStatsResponse>,
+        loyaltyApi.listRewards() as Promise<Reward[]>,
+      ]);
+
+      setStats({
+        totalClients: statsResp.stats.totalClients,
+        totalPointsActive: statsResp.stats.totalPointsActive,
+        totalPointsRedeemed: statsResp.stats.totalPointsRedeemed,
+        tierDistribution: {
+          BRONZE: statsResp.tierDistribution.BRONZE || 0,
+          SILVER: statsResp.tierDistribution.SILVER || 0,
+          GOLD: statsResp.tierDistribution.GOLD || 0,
+          DIAMOND: statsResp.tierDistribution.DIAMOND || 0,
+        },
+      });
+      setProgram(statsResp.program);
+      setRecentRedemptions(statsResp.recentRedemptions || []);
+      setRewards(rewardsList || []);
+    } catch (err) {
+      if (isPremiumLockedError(err)) {
+        setLocked(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar dados de fidelidade.');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const tierColors = {
     BRONZE: 'text-amber-700 bg-amber-100',
@@ -99,9 +136,10 @@ export default function FidelidadePage() {
 
   const rewardTypeLabels: Record<string, string> = {
     DISCOUNT_PERCENT: 'Desconto Percentual',
-    DISCOUNT_AMOUNT: 'Desconto em Reais',
+    DISCOUNT_FIXED: 'Desconto em Reais',
     FREE_SERVICE: 'Servico Gratuito',
-    PRODUCT: 'Produto',
+    FREE_PRODUCT: 'Produto Gratuito',
+    CASHBACK: 'Cashback',
   };
 
   const handleCloseModal = () => {
@@ -117,26 +155,50 @@ export default function FidelidadePage() {
     }
 
     setSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const newReward: Reward = {
-      id: Date.now().toString(),
-      name: formData.name,
-      description: formData.description,
-      pointsCost: formData.pointsCost,
-      type: formData.type,
-      totalRedemptions: 0,
-    };
-
-    setRewards(prev => [...prev, newReward]);
-    handleCloseModal();
-    setSaving(false);
+    try {
+      const created = await loyaltyApi.createReward({
+        name: formData.name,
+        description: formData.description || undefined,
+        pointsCost: formData.pointsCost,
+        type: formData.type,
+        discountPercent: formData.type === 'DISCOUNT_PERCENT' ? formData.discountValue : undefined,
+        discountAmount: formData.type === 'DISCOUNT_FIXED' ? formData.discountValue : undefined,
+      });
+      setRewards(prev => [...prev, created as Reward]);
+      handleCloseModal();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao criar recompensa');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Programa de Fidelidade"
+          description="Gerencie pontos, recompensas e fidelizacao de clientes"
+        />
+        <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-10 text-center">
+          <Crown className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+          <h2 className="text-lg font-semibold mb-1">Recurso Premium</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Este recurso faz parte do plano premium do bela360. Peça um cupom de desbloqueio em{' '}
+            <a href="/configuracoes" className="text-primary underline">
+              Configurações &gt; Plano
+            </a>
+            .
+          </p>
+        </div>
       </div>
     );
   }
@@ -154,6 +216,12 @@ export default function FidelidadePage() {
         }
       />
 
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -163,7 +231,7 @@ export default function FidelidadePage() {
               <Users className="h-4.5 w-4.5" />
             </div>
           </div>
-          <p className="mt-3 text-3xl font-bold">{stats?.totalClients}</p>
+          <p className="mt-3 text-3xl font-bold">{stats?.totalClients ?? 0}</p>
           <p className="text-xs text-muted-foreground mt-1">clientes ativos</p>
         </div>
 
@@ -175,7 +243,7 @@ export default function FidelidadePage() {
             </div>
           </div>
           <p className="mt-3 text-3xl font-bold text-gold-foreground dark:text-gold">
-            {stats?.totalPointsActive?.toLocaleString()}
+            {(stats?.totalPointsActive ?? 0).toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground mt-1">em circulacao</p>
         </div>
@@ -188,7 +256,7 @@ export default function FidelidadePage() {
             </div>
           </div>
           <p className="mt-3 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-            {stats?.totalPointsRedeemed?.toLocaleString()}
+            {(stats?.totalPointsRedeemed ?? 0).toLocaleString()}
           </p>
           <p className="text-xs text-muted-foreground mt-1">total historico</p>
         </div>
@@ -215,13 +283,13 @@ export default function FidelidadePage() {
             Distribuicao por Nivel
           </h2>
           <div className="grid grid-cols-4 gap-4">
-            {(Object.keys(stats?.tierDistribution || {}) as Array<keyof typeof tierColors>).map((tier) => (
+            {(Object.keys(stats?.tierDistribution || tierLabels) as Array<keyof typeof tierColors>).map((tier) => (
               <div key={tier} className="text-center">
                 <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${tierColors[tier]} mb-2`}>
                   <Crown className="h-8 w-8" />
                 </div>
                 <p className="font-semibold">{tierLabels[tier]}</p>
-                <p className="text-2xl font-bold">{stats?.tierDistribution[tier]}</p>
+                <p className="text-2xl font-bold">{stats?.tierDistribution[tier] ?? 0}</p>
                 <p className="text-xs text-muted-foreground">clientes</p>
               </div>
             ))}
@@ -238,6 +306,9 @@ export default function FidelidadePage() {
               Recompensas Disponiveis
             </h2>
             <div className="space-y-3">
+              {rewards.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhuma recompensa cadastrada ainda.</p>
+              )}
               {rewards.map((reward) => (
                 <div key={reward.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
                   <div className="flex items-center gap-3">
@@ -267,6 +338,9 @@ export default function FidelidadePage() {
               Resgates Recentes
             </h2>
             <div className="space-y-3">
+              {recentRedemptions.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum resgate recente.</p>
+              )}
               {recentRedemptions.map((redemption) => (
                 <div key={redemption.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-xl">
                   <div>
@@ -296,19 +370,19 @@ export default function FidelidadePage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 bg-muted/50 rounded-xl text-center">
               <p className="text-sm text-muted-foreground">Pontos por R$1</p>
-              <p className="text-2xl font-bold">1</p>
+              <p className="text-2xl font-bold">{Number(program?.pointsPerReal ?? 1)}</p>
             </div>
             <div className="p-4 bg-muted/50 rounded-xl text-center">
               <p className="text-sm text-muted-foreground">Prata a partir de</p>
-              <p className="text-2xl font-bold">100 pts</p>
+              <p className="text-2xl font-bold">{program?.silverThreshold ?? 100} pts</p>
             </div>
             <div className="p-4 bg-muted/50 rounded-xl text-center">
               <p className="text-sm text-muted-foreground">Ouro a partir de</p>
-              <p className="text-2xl font-bold">500 pts</p>
+              <p className="text-2xl font-bold">{program?.goldThreshold ?? 500} pts</p>
             </div>
             <div className="p-4 bg-muted/50 rounded-xl text-center">
               <p className="text-sm text-muted-foreground">Diamante a partir de</p>
-              <p className="text-2xl font-bold">1000 pts</p>
+              <p className="text-2xl font-bold">{program?.diamondThreshold ?? 1000} pts</p>
             </div>
           </div>
         </CardContent>
@@ -338,9 +412,10 @@ export default function FidelidadePage() {
             onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
           >
             <option value="DISCOUNT_PERCENT">Desconto Percentual (%)</option>
-            <option value="DISCOUNT_AMOUNT">Desconto em Reais (R$)</option>
+            <option value="DISCOUNT_FIXED">Desconto em Reais (R$)</option>
             <option value="FREE_SERVICE">Servico Gratuito</option>
-            <option value="PRODUCT">Produto</option>
+            <option value="FREE_PRODUCT">Produto Gratuito</option>
+            <option value="CASHBACK">Cashback</option>
           </Select>
           <div className="grid grid-cols-2 gap-4">
             <Input

@@ -288,6 +288,19 @@ export class BusinessService {
         commission: data.commission !== undefined ? String(data.commission) : undefined,
         isActive: true,
       },
+      select: {
+        id: true,
+        businessId: true,
+        name: true,
+        phone: true,
+        email: true,
+        role: true,
+        isActive: true,
+        color: true,
+        commission: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     // Copy business working hours for the professional
@@ -344,6 +357,19 @@ export class BusinessService {
         ...(data.color && { color: data.color }),
         ...(data.commission !== undefined && { commission: String(data.commission) }),
       },
+      select: {
+        id: true,
+        businessId: true,
+        name: true,
+        phone: true,
+        email: true,
+        role: true,
+        isActive: true,
+        color: true,
+        commission: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     return professional;
@@ -374,7 +400,18 @@ export class BusinessService {
         isActive: true,
         role: { in: ['PROFESSIONAL', 'ADMIN', 'OWNER'] },
       },
-      include: {
+      select: {
+        id: true,
+        businessId: true,
+        name: true,
+        phone: true,
+        email: true,
+        role: true,
+        isActive: true,
+        color: true,
+        commission: true,
+        createdAt: true,
+        updatedAt: true,
         services: {
           include: {
             service: true,

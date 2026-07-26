@@ -1,19 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Clock, UserPlus, Phone, Calendar, Sun, Sunset, Moon, X, Users } from 'lucide-react';
-import { Button, Badge, PageHeader } from '@/components/ui';
+import { Button, Badge, PageHeader, Modal, Select, Input } from '@/components/ui';
+import { api, waitlistApi, clientsApi, servicesApi, Client, Service } from '@/lib/api';
 
 interface WaitlistEntry {
   id: string;
-  client: { name: string; phone: string };
-  service: { name: string };
-  professional?: { name: string };
+  client: { id: string; name: string; phone: string };
+  service: { id: string; name: string };
+  professional?: { id: string; name: string } | null;
   desiredDate: string;
   desiredPeriod: string;
   status: string;
-  priority: number;
   createdAt: string;
+}
+
+interface WaitlistStats {
+  waiting: number;
+  notified: number;
+  converted: number;
+  expired: number;
+  total: number;
+  conversionRate: number;
+}
+
+interface ProfessionalOption {
+  id: string;
+  name: string;
 }
 
 const periodIcons = {
@@ -30,69 +44,109 @@ const periodLabels = {
   ANY: 'Qualquer',
 };
 
-function statusBadgeVariant(status: string): 'warning' | 'info' | 'success' {
+function statusBadgeVariant(status: string): 'warning' | 'info' | 'success' | 'outline' | 'destructive' {
   if (status === 'WAITING') return 'warning';
   if (status === 'NOTIFIED') return 'info';
-  return 'success';
+  if (status === 'CONVERTED') return 'success';
+  if (status === 'EXPIRED') return 'outline';
+  if (status === 'CANCELLED') return 'destructive';
+  return 'outline';
 }
 
 function statusLabel(status: string): string {
   if (status === 'WAITING') return 'Aguardando';
   if (status === 'NOTIFIED') return 'Notificado';
-  return 'Convertido';
+  if (status === 'CONVERTED') return 'Convertido';
+  if (status === 'EXPIRED') return 'Expirado';
+  if (status === 'CANCELLED') return 'Cancelado';
+  return status;
 }
+
+const emptyForm = {
+  clientId: '',
+  serviceId: '',
+  professionalId: '',
+  desiredDate: '',
+  desiredPeriod: 'ANY',
+};
 
 export default function ListaEsperaPage() {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
+  const [stats, setStats] = useState<WaitlistStats | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [professionals, setProfessionals] = useState<ProfessionalOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [formData, setFormData] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    // Simulated data - replace with API call
-    setEntries([
-      {
-        id: '1',
-        client: { name: 'Maria Silva', phone: '(11) 99999-0001' },
-        service: { name: 'Corte Feminino' },
-        professional: { name: 'Ana Paula' },
-        desiredDate: '2026-01-10',
-        desiredPeriod: 'MORNING',
-        status: 'WAITING',
-        priority: 1,
-        createdAt: '2026-01-03',
-      },
-      {
-        id: '2',
-        client: { name: 'João Santos', phone: '(11) 99999-0002' },
-        service: { name: 'Barba' },
-        desiredDate: '2026-01-08',
-        desiredPeriod: 'AFTERNOON',
-        status: 'WAITING',
-        priority: 2,
-        createdAt: '2026-01-04',
-      },
-      {
-        id: '3',
-        client: { name: 'Carla Oliveira', phone: '(11) 99999-0003' },
-        service: { name: 'Manicure' },
-        desiredDate: '2026-01-07',
-        desiredPeriod: 'ANY',
-        status: 'NOTIFIED',
-        priority: 3,
-        createdAt: '2026-01-02',
-      },
-    ]);
-    setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [statsData, entriesData, clientsData, servicesData, professionalsData] = await Promise.all([
+        waitlistApi.getStats() as Promise<WaitlistStats>,
+        waitlistApi.list() as Promise<WaitlistEntry[]>,
+        clientsApi.list(),
+        servicesApi.list(),
+        api.get<ProfessionalOption[]>('/business/professionals'),
+      ]);
+      setStats(statsData);
+      setEntries(entriesData.filter(e => e.status === 'WAITING' || e.status === 'NOTIFIED'));
+      setClients(clientsData);
+      setServices(servicesData);
+      setProfessionals(professionalsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar lista de espera');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleNotify = (id: string) => {
-    setEntries(prev =>
-      prev.map(e => (e.id === id ? { ...e, status: 'NOTIFIED' } : e))
-    );
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setFormData(emptyForm);
   };
 
-  const handleRemove = (id: string) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
+  const handleRemove = async (id: string) => {
+    try {
+      await waitlistApi.delete(id);
+      setEntries(prev => prev.filter(e => e.id !== id));
+      setStats(prev => (prev ? { ...prev, waiting: Math.max(0, prev.waiting - 1) } : prev));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao remover da lista de espera');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.clientId || !formData.serviceId || !formData.desiredDate) {
+      alert('Cliente, servico e data desejada sao obrigatorios');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await waitlistApi.create({
+        clientId: formData.clientId,
+        serviceId: formData.serviceId,
+        professionalId: formData.professionalId || undefined,
+        desiredDate: formData.desiredDate,
+        desiredPeriod: formData.desiredPeriod,
+      });
+      await loadData();
+      handleCloseModal();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao adicionar a lista de espera');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -116,6 +170,12 @@ export default function ListaEsperaPage() {
         }
       />
 
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -126,7 +186,7 @@ export default function ListaEsperaPage() {
             </div>
           </div>
           <p className="mt-3 text-3xl font-bold text-amber-500">
-            {entries.filter(e => e.status === 'WAITING').length}
+            {stats?.waiting ?? entries.filter(e => e.status === 'WAITING').length}
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -137,7 +197,7 @@ export default function ListaEsperaPage() {
             </div>
           </div>
           <p className="mt-3 text-3xl font-bold text-blue-500">
-            {entries.filter(e => e.status === 'NOTIFIED').length}
+            {stats?.notified ?? entries.filter(e => e.status === 'NOTIFIED').length}
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -197,7 +257,7 @@ export default function ListaEsperaPage() {
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       <PeriodIcon className="h-4 w-4 text-muted-foreground" />
-                      {periodLabels[entry.desiredPeriod as keyof typeof periodLabels]}
+                      {periodLabels[entry.desiredPeriod as keyof typeof periodLabels] || entry.desiredPeriod}
                     </div>
                   </td>
                   <td className="p-4">
@@ -207,17 +267,6 @@ export default function ListaEsperaPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      {entry.status === 'WAITING' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-blue-500"
-                          onClick={() => handleNotify(entry.id)}
-                          title="Notificar"
-                        >
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -241,6 +290,76 @@ export default function ListaEsperaPage() {
           </div>
         )}
       </div>
+
+      {/* Add to Waitlist Modal */}
+      <Modal open={showAddModal} onClose={handleCloseModal} title="Adicionar à Lista de Espera">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Select
+            label="Cliente *"
+            value={formData.clientId}
+            onChange={(e) => setFormData(prev => ({ ...prev, clientId: e.target.value }))}
+            required
+          >
+            <option value="">Selecione um cliente</option>
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Serviço *"
+            value={formData.serviceId}
+            onChange={(e) => setFormData(prev => ({ ...prev, serviceId: e.target.value }))}
+            required
+          >
+            <option value="">Selecione um serviço</option>
+            {services.map((service) => (
+              <option key={service.id} value={service.id}>
+                {service.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Profissional (opcional)"
+            value={formData.professionalId}
+            onChange={(e) => setFormData(prev => ({ ...prev, professionalId: e.target.value }))}
+          >
+            <option value="">Qualquer profissional</option>
+            {professionals.map((professional) => (
+              <option key={professional.id} value={professional.id}>
+                {professional.name}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Data desejada *"
+            type="date"
+            value={formData.desiredDate}
+            onChange={(e) => setFormData(prev => ({ ...prev, desiredDate: e.target.value }))}
+            required
+          />
+          <Select
+            label="Período"
+            value={formData.desiredPeriod}
+            onChange={(e) => setFormData(prev => ({ ...prev, desiredPeriod: e.target.value }))}
+          >
+            {Object.entries(periodLabels).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </Select>
+          <div className="flex gap-4 pt-4">
+            <Button type="button" variant="outline" onClick={handleCloseModal} disabled={saving} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="submit" loading={saving} className="flex-1">
+              {saving ? 'Adicionando...' : 'Adicionar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

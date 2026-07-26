@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DollarSign,
   TrendingUp,
@@ -10,11 +10,11 @@ import {
   Calendar,
   Users,
   ArrowUpRight,
-  ArrowDownRight,
 } from 'lucide-react';
 import { ExportButton } from '@/components/ExportButton';
 import { exportData, ExportFormat } from '@/lib/export';
-import { Button, Card, CardContent, Modal, Input, Select, PageHeader } from '@/components/ui';
+import { Card, CardContent, PageHeader } from '@/components/ui';
+import { api, financeApi, appointmentsApi, Appointment } from '@/lib/api';
 
 interface FinancialSummary {
   totalRevenue: number;
@@ -24,53 +24,99 @@ interface FinancialSummary {
   averageTicket: number;
 }
 
-interface PaymentMethod {
+interface PaymentMethodTotal {
   method: string;
   total: number;
   count: number;
 }
 
-interface Payment {
-  id: string;
-  clientName: string;
-  amount: number;
-  method: string;
-  createdAt: string;
+interface FinanceReportResponse {
+  summary: FinancialSummary;
+  byMethod: Array<{ method: string; _sum: { finalAmount: number | string | null }; _count: number }>;
+}
+
+interface CashRegisterData {
+  totalRevenue: number | string;
+  totalCommissions: number | string;
+  businessProfit: number | string;
+  isClosed: boolean;
+}
+
+interface PendingCommission {
+  professional?: { id: string; name: string };
+  pendingAmount: number;
+  paymentCount: number;
+}
+
+const toNum = (v: number | string | null | undefined) => Number(v || 0);
+
+function getDateRange(period: string): { startDate: string; endDate: string } {
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now);
+  end.setDate(end.getDate() + 1); // exclusive upper bound so today's payments are fully included
+
+  if (period === 'week') start.setDate(start.getDate() - 7);
+  else if (period === 'month') start.setDate(1);
+  else if (period === 'year') { start.setMonth(0); start.setDate(1); }
+
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  return { startDate: fmt(start), endDate: fmt(end) };
 }
 
 export default function FinanceiroPage() {
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
-  const [byMethod, setByMethod] = useState<PaymentMethod[]>([]);
+  const [byMethod, setByMethod] = useState<PaymentMethodTotal[]>([]);
+  const [cashRegister, setCashRegister] = useState<CashRegisterData | null>(null);
+  const [pendingCommissions, setPendingCommissions] = useState<PendingCommission[]>([]);
+  const [payableAppointments, setPayableAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [period, setPeriod] = useState('month');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCloseCashModal, setShowCloseCashModal] = useState(false);
   const [showCommissionsModal, setShowCommissionsModal] = useState(false);
   const [paymentData, setPaymentData] = useState({
-    clientName: '',
+    appointmentId: '',
     amount: 0,
     method: 'PIX',
-    description: '',
+    notes: '',
   });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    // Simulated data - replace with API call
-    setSummary({
-      totalRevenue: 15750.00,
-      totalCommissions: 4725.00,
-      businessProfit: 11025.00,
-      transactionCount: 87,
-      averageTicket: 181.03,
-    });
-    setByMethod([
-      { method: 'PIX', total: 8500.00, count: 45 },
-      { method: 'CREDIT_CARD', total: 4200.00, count: 28 },
-      { method: 'DEBIT_CARD', total: 2050.00, count: 10 },
-      { method: 'CASH', total: 1000.00, count: 4 },
-    ]);
-    setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { startDate, endDate } = getDateRange(period);
+      const [report, cash, pending, appts] = await Promise.all([
+        financeApi.getReport(startDate, endDate) as Promise<FinanceReportResponse>,
+        financeApi.getCashRegister().catch(() => null) as Promise<CashRegisterData | null>,
+        api.get<PendingCommission[]>('/finance/commissions/pending').catch(() => []),
+        appointmentsApi.list({ status: 'COMPLETED' }).catch(() => []),
+      ]);
+
+      setSummary(report.summary);
+      setByMethod(
+        (report.byMethod || []).map((m) => ({
+          method: m.method,
+          total: toNum(m._sum.finalAmount),
+          count: m._count,
+        }))
+      );
+      setCashRegister(cash);
+      setPendingCommissions(pending || []);
+      setPayableAppointments(appts || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar dados financeiros');
+    } finally {
+      setLoading(false);
+    }
   }, [period]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -78,6 +124,9 @@ export default function FinanceiroPage() {
       currency: 'BRL',
     }).format(value);
   };
+
+  const formatDateTime = (value: string) =>
+    new Date(value).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   const methodIcons: Record<string, typeof DollarSign> = {
     PIX: QrCode,
@@ -91,54 +140,63 @@ export default function FinanceiroPage() {
     CREDIT_CARD: 'Cartão Crédito',
     DEBIT_CARD: 'Cartão Débito',
     CASH: 'Dinheiro',
+    OTHER: 'Outro',
   };
 
   const handleCloseModals = () => {
     setShowPaymentModal(false);
     setShowCloseCashModal(false);
     setShowCommissionsModal(false);
-    setPaymentData({ clientName: '', amount: 0, method: 'PIX', description: '' });
+    setPaymentData({ appointmentId: '', amount: 0, method: 'PIX', notes: '' });
+  };
+
+  const handleSelectAppointment = (appointmentId: string) => {
+    const appt = payableAppointments.find((a) => a.id === appointmentId);
+    setPaymentData((prev) => ({
+      ...prev,
+      appointmentId,
+      amount: appt?.service?.price ? Number(appt.service.price) : prev.amount,
+    }));
   };
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentData.clientName || paymentData.amount <= 0) {
-      alert('Cliente e valor sao obrigatorios');
+    if (!paymentData.appointmentId || paymentData.amount <= 0) {
+      alert('Selecione o agendamento e informe o valor');
       return;
     }
 
     setSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Update summary
-    if (summary) {
-      setSummary({
-        ...summary,
-        totalRevenue: summary.totalRevenue + paymentData.amount,
-        transactionCount: summary.transactionCount + 1,
-        averageTicket: (summary.totalRevenue + paymentData.amount) / (summary.transactionCount + 1),
-        businessProfit: summary.businessProfit + (paymentData.amount * 0.7),
+    try {
+      await financeApi.registerPayment({
+        appointmentId: paymentData.appointmentId,
+        amount: paymentData.amount,
+        method: paymentData.method,
+        notes: paymentData.notes || undefined,
       });
+      await loadData();
+      handleCloseModals();
+      alert('Pagamento registrado com sucesso!');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao registrar pagamento');
+    } finally {
+      setSaving(false);
     }
-
-    // Update payment method totals
-    setByMethod(prev => prev.map(m =>
-      m.method === paymentData.method
-        ? { ...m, total: m.total + paymentData.amount, count: m.count + 1 }
-        : m
-    ));
-
-    handleCloseModals();
-    setSaving(false);
-    alert('Pagamento registrado com sucesso!');
   };
 
   const handleCloseCash = async () => {
     setSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setSaving(false);
-    handleCloseModals();
-    alert('Caixa fechado com sucesso! Relatorio gerado.');
+    try {
+      const dateStr = new Date().toISOString().split('T')[0];
+      await financeApi.closeCashRegister(dateStr);
+      await loadData();
+      handleCloseModals();
+      alert('Caixa fechado com sucesso! Relatorio gerado.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao fechar caixa');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const [exporting, setExporting] = useState(false);
@@ -209,6 +267,12 @@ export default function FinanceiroPage() {
         }
       />
 
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Main Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -222,7 +286,7 @@ export default function FinanceiroPage() {
             {formatCurrency(summary?.totalRevenue || 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {summary?.transactionCount} transações
+            {summary?.transactionCount || 0} transações
           </p>
         </div>
 
@@ -278,6 +342,9 @@ export default function FinanceiroPage() {
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold mb-4">Por Forma de Pagamento</h2>
             <div className="space-y-4">
+              {byMethod.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum pagamento registrado no período.</p>
+              )}
               {byMethod.map((method) => {
                 const Icon = methodIcons[method.method] || DollarSign;
                 const percentage = (method.total / (summary?.totalRevenue || 1)) * 100;
@@ -377,15 +444,25 @@ export default function FinanceiroPage() {
             <h2 className="text-xl font-bold mb-4">Registrar Pagamento</h2>
             <form onSubmit={handleSubmitPayment} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Cliente *</label>
-                <input
-                  type="text"
-                  value={paymentData.clientName}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, clientName: e.target.value }))}
-                  placeholder="Nome do cliente"
+                <label className="block text-sm font-medium mb-1">Agendamento *</label>
+                <select
+                  value={paymentData.appointmentId}
+                  onChange={(e) => handleSelectAppointment(e.target.value)}
                   required
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
+                >
+                  <option value="">Selecione um atendimento concluído</option>
+                  {payableAppointments.map((appt) => (
+                    <option key={appt.id} value={appt.id}>
+                      {appt.client?.name || 'Cliente'} - {appt.service?.name || 'Serviço'} ({formatDateTime(appt.startTime)})
+                    </option>
+                  ))}
+                </select>
+                {payableAppointments.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Nenhum agendamento concluído aguardando pagamento.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Valor (R$) *</label>
@@ -411,14 +488,15 @@ export default function FinanceiroPage() {
                   <option value="CREDIT_CARD">Cartão de Crédito</option>
                   <option value="DEBIT_CARD">Cartão de Débito</option>
                   <option value="CASH">Dinheiro</option>
+                  <option value="OTHER">Outro</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Descrição</label>
+                <label className="block text-sm font-medium mb-1">Observações</label>
                 <input
                   type="text"
-                  value={paymentData.description}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, description: e.target.value }))}
+                  value={paymentData.notes}
+                  onChange={(e) => setPaymentData(prev => ({ ...prev, notes: e.target.value }))}
                   placeholder="Ex: Corte + Escova"
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
@@ -434,7 +512,7 @@ export default function FinanceiroPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || payableAppointments.length === 0}
                   className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
                 >
                   {saving ? 'Salvando...' : 'Registrar'}
@@ -456,21 +534,25 @@ export default function FinanceiroPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Receita Total:</span>
-                    <span className="font-bold text-green-600">{formatCurrency(summary?.totalRevenue || 0)}</span>
+                    <span className="font-bold text-green-600">{formatCurrency(toNum(cashRegister?.totalRevenue))}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Comissões:</span>
-                    <span className="font-bold text-orange-600">{formatCurrency(summary?.totalCommissions || 0)}</span>
+                    <span className="font-bold text-orange-600">{formatCurrency(toNum(cashRegister?.totalCommissions))}</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span>Lucro do Salão:</span>
-                    <span className="font-bold text-blue-600">{formatCurrency(summary?.businessProfit || 0)}</span>
+                    <span className="font-bold text-blue-600">{formatCurrency(toNum(cashRegister?.businessProfit))}</span>
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Ao fechar o caixa, um relatório será gerado automaticamente e as comissões serão calculadas.
-              </p>
+              {cashRegister?.isClosed ? (
+                <p className="text-sm text-amber-600">O caixa de hoje já foi fechado.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Ao fechar o caixa, um relatório será gerado automaticamente e as comissões serão calculadas.
+                </p>
+              )}
               <div className="flex gap-4 pt-4">
                 <button
                   onClick={handleCloseModals}
@@ -481,7 +563,7 @@ export default function FinanceiroPage() {
                 </button>
                 <button
                   onClick={handleCloseCash}
-                  disabled={saving}
+                  disabled={saving || !!cashRegister?.isClosed}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                   {saving ? 'Fechando...' : 'Confirmar Fechamento'}
@@ -505,32 +587,25 @@ export default function FinanceiroPage() {
               </button>
             </div>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div>
-                  <p className="font-medium">Ana</p>
-                  <p className="text-sm text-muted-foreground">12 atendimentos</p>
+              {pendingCommissions.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhuma comissão pendente.</p>
+              )}
+              {pendingCommissions.map((p) => (
+                <div key={p.professional?.id || p.professional?.name} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{p.professional?.name || 'Profissional'}</p>
+                    <p className="text-sm text-muted-foreground">{p.paymentCount} atendimentos</p>
+                  </div>
+                  <p className="font-bold text-purple-600">{formatCurrency(p.pendingAmount)}</p>
                 </div>
-                <p className="font-bold text-purple-600">{formatCurrency(1890)}</p>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div>
-                  <p className="font-medium">Carlos</p>
-                  <p className="text-sm text-muted-foreground">8 atendimentos</p>
-                </div>
-                <p className="font-bold text-purple-600">{formatCurrency(1245)}</p>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div>
-                  <p className="font-medium">Julia</p>
-                  <p className="text-sm text-muted-foreground">10 atendimentos</p>
-                </div>
-                <p className="font-bold text-purple-600">{formatCurrency(1590)}</p>
-              </div>
+              ))}
             </div>
             <div className="mt-4 pt-4 border-t">
               <div className="flex justify-between font-bold">
                 <span>Total Pendente:</span>
-                <span className="text-purple-600">{formatCurrency(4725)}</span>
+                <span className="text-purple-600">
+                  {formatCurrency(pendingCommissions.reduce((sum, p) => sum + p.pendingAmount, 0))}
+                </span>
               </div>
             </div>
             <button

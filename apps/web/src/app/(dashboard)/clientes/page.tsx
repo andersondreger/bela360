@@ -1,33 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, Plus, MessageCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, Plus, MessageCircle, AlertCircle } from 'lucide-react';
 import { ExportButton } from '@/components/ExportButton';
 import { exportData, ExportFormat, prepareClientExport } from '@/lib/export';
 import { Button, Input, Textarea, Modal, PageHeader } from '@/components/ui';
-
-interface Client {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  lastVisit: string;
-  totalVisits: number;
-  totalSpent: number;
-  birthdate?: string;
-  notes?: string;
-}
-
-const initialClients: Client[] = [
-  { id: '1', name: 'Maria Silva', phone: '11999887766', email: 'maria@email.com', lastVisit: '2024-01-15', totalVisits: 12, totalSpent: 1240 },
-  { id: '2', name: 'Joao Santos', phone: '11988776655', email: 'joao@email.com', lastVisit: '2024-01-20', totalVisits: 8, totalSpent: 640 },
-  { id: '3', name: 'Carla Oliveira', phone: '11977665544', email: 'carla@email.com', lastVisit: '2024-01-18', totalVisits: 5, totalSpent: 890 },
-  { id: '4', name: 'Pedro Costa', phone: '11966554433', email: 'pedro@email.com', lastVisit: '2024-01-22', totalVisits: 15, totalSpent: 1800 },
-  { id: '5', name: 'Ana Souza', phone: '11955443322', email: 'ana@email.com', lastVisit: '2024-01-10', totalVisits: 3, totalSpent: 350 },
-];
+import { clientsApi, Client } from '@/lib/api';
 
 export default function ClientesPage() {
-  const [clients, setClients] = useState<Client[]>(initialClients);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -40,24 +23,37 @@ export default function ClientesPage() {
     notes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
   const [exporting, setExporting] = useState(false);
 
-  const filteredClients = clients.filter(
-    client =>
-      client.name.toLowerCase().includes(search.toLowerCase()) ||
-      client.phone.includes(search) ||
-      client.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const fetchClients = async (searchTerm: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await clientsApi.list({ search: searchTerm || undefined, limit: 100 });
+      setClients(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar clientes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(() => fetchClients(search), search ? 300 : 0);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const handleExport = (format: ExportFormat) => {
     setExporting(true);
     try {
-      const clientsForExport = filteredClients.map(c => ({
+      const clientsForExport = clients.map(c => ({
         name: c.name,
         phone: formatPhone(c.phone),
         email: c.email || undefined,
-        lastVisitAt: c.lastVisit,
-        totalAppointments: c.totalVisits,
+        lastVisitAt: c.createdAt,
+        totalAppointments: c.totalAppointments,
         totalSpent: c.totalSpent,
       }));
 
@@ -65,7 +61,7 @@ export default function ClientesPage() {
       exportData(data, format, {
         filename: `clientes-${new Date().toISOString().split('T')[0]}`,
         title: 'Lista de Clientes',
-        subtitle: `${filteredClients.length} clientes`,
+        subtitle: `${clients.length} clientes`,
       });
     } finally {
       setExporting(false);
@@ -81,6 +77,7 @@ export default function ClientesPage() {
     setShowNewModal(false);
     setShowProfileModal(false);
     setSelectedClient(null);
+    setFormError('');
     setFormData({ name: '', phone: '', email: '', birthdate: '', notes: '' });
   };
 
@@ -92,30 +89,28 @@ export default function ClientesPage() {
   const handleSubmitNewClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.phone) {
-      alert('Nome e telefone sao obrigatorios');
+      setFormError('Nome e telefone sao obrigatorios');
       return;
     }
 
     setSaving(true);
+    setFormError('');
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const newClient: Client = {
-      id: Date.now().toString(),
-      name: formData.name,
-      phone: formData.phone.replace(/\D/g, ''),
-      email: formData.email,
-      birthdate: formData.birthdate,
-      notes: formData.notes,
-      lastVisit: new Date().toISOString().split('T')[0],
-      totalVisits: 0,
-      totalSpent: 0,
-    };
-
-    setClients(prev => [newClient, ...prev]);
-    handleCloseModals();
-    setSaving(false);
+    try {
+      await clientsApi.create({
+        name: formData.name,
+        phone: formData.phone.replace(/\D/g, ''),
+        email: formData.email || undefined,
+        birthDate: formData.birthdate || undefined,
+        notes: formData.notes || undefined,
+      });
+      handleCloseModals();
+      await fetchClients(search);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao cadastrar cliente');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const formatPhone = (phone: string) => {
@@ -158,6 +153,13 @@ export default function ClientesPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <span className="text-sm">{error}</span>
+        </div>
+      )}
+
       {/* Clients Table */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <table className="w-full">
@@ -170,7 +172,7 @@ export default function ClientesPage() {
                 Telefone
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Ultima Visita
+                Cliente Desde
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Total Visitas
@@ -184,43 +186,57 @@ export default function ClientesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {filteredClients.map((client) => (
-              <tr key={client.id} className="hover:bg-muted/50">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-brand rounded-full flex items-center justify-center text-white font-medium">
-                      {client.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{client.name}</p>
-                      <p className="text-sm text-muted-foreground">{client.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-muted-foreground">
-                  {formatPhone(client.phone)}
-                </td>
-                <td className="px-6 py-4 text-muted-foreground">
-                  {formatDate(client.lastVisit)}
-                </td>
-                <td className="px-6 py-4 text-muted-foreground">
-                  {client.totalVisits}
-                </td>
-                <td className="px-6 py-4 text-muted-foreground">
-                  {formatCurrency(client.totalSpent)}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary hover:text-primary"
-                    onClick={() => handleOpenProfile(client)}
-                  >
-                    Ver perfil
-                  </Button>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                  Carregando clientes...
                 </td>
               </tr>
-            ))}
+            ) : clients.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                  Nenhum cliente encontrado
+                </td>
+              </tr>
+            ) : (
+              clients.map((client) => (
+                <tr key={client.id} className="hover:bg-muted/50">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-brand rounded-full flex items-center justify-center text-white font-medium">
+                        {client.name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{client.name}</p>
+                        <p className="text-sm text-muted-foreground">{client.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    {formatPhone(client.phone)}
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    {formatDate(client.createdAt)}
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    {client.totalAppointments}
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    {formatCurrency(client.totalSpent)}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-primary hover:text-primary"
+                      onClick={() => handleOpenProfile(client)}
+                    >
+                      Ver perfil
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -269,6 +285,7 @@ export default function ClientesPage() {
             placeholder="Observacoes sobre o cliente..."
             rows={3}
           />
+          {formError && <p className="text-sm text-destructive">{formError}</p>}
           <div className="flex gap-4 pt-4">
             <Button
               type="button"
@@ -299,7 +316,7 @@ export default function ClientesPage() {
 
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-muted rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-primary">{selectedClient.totalVisits}</p>
+                <p className="text-2xl font-bold text-primary">{selectedClient.totalAppointments}</p>
                 <p className="text-sm text-muted-foreground">Visitas</p>
               </div>
               <div className="bg-muted rounded-xl p-4 text-center">
@@ -314,13 +331,19 @@ export default function ClientesPage() {
                 <span>{selectedClient.email || '-'}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-border">
-                <span className="text-muted-foreground">Ultima Visita</span>
-                <span>{formatDate(selectedClient.lastVisit)}</span>
+                <span className="text-muted-foreground">Cliente Desde</span>
+                <span>{formatDate(selectedClient.createdAt)}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Aniversario</span>
-                <span>{selectedClient.birthdate ? formatDate(selectedClient.birthdate) : '-'}</span>
+                <span>{selectedClient.birthDate ? formatDate(selectedClient.birthDate) : '-'}</span>
               </div>
+              {selectedClient.notes && (
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Observacoes</span>
+                  <span className="text-right">{selectedClient.notes}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-4">
@@ -332,7 +355,7 @@ export default function ClientesPage() {
                 <MessageCircle className="w-5 h-5" />
                 WhatsApp
               </Button>
-              <Button className="flex-1">
+              <Button className="flex-1" onClick={() => { window.location.href = '/agenda'; }}>
                 Agendar
               </Button>
             </div>

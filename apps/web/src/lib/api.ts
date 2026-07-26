@@ -1,5 +1,18 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
+/** Builds a query string, dropping undefined/null values instead of stringifying them as "undefined". */
+function buildQuery(params?: Record<string, unknown>): string {
+  if (!params) return '';
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      usp.set(key, String(value));
+    }
+  }
+  const qs = usp.toString();
+  return qs ? `?${qs}` : '';
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -208,8 +221,7 @@ export interface Client {
 
 export const clientsApi = {
   list: (params?: { search?: string; page?: number; limit?: number }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<Client[]>(`/clients${qs ? `?${qs}` : ''}`);
+    return api.get<Client[]>(`/clients${buildQuery(params)}`);
   },
   getById: (id: string) => api.get<Client>(`/clients/${id}`),
   create: (data: { name: string; phone: string; email?: string; birthDate?: string; notes?: string }) =>
@@ -259,8 +271,7 @@ export interface Appointment {
 
 export const appointmentsApi = {
   list: (params?: { startDate?: string; endDate?: string; professionalId?: string; status?: AppointmentStatus }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<Appointment[]>(`/appointments${qs ? `?${qs}` : ''}`);
+    return api.get<Appointment[]>(`/appointments${buildQuery(params)}`);
   },
   today: () => api.get<Appointment[]>('/appointments/today'),
   getById: (id: string) => api.get<Appointment>(`/appointments/${id}`),
@@ -293,8 +304,7 @@ export const financeApi = {
     return api.get<any>(`/finance/report${qs ? `?${qs}` : ''}`);
   },
   listPayments: (params?: { startDate?: string; endDate?: string; professionalId?: string }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<Payment[]>(`/finance/payments${qs ? `?${qs}` : ''}`);
+    return api.get<Payment[]>(`/finance/payments${buildQuery(params)}`);
   },
   registerPayment: (data: { appointmentId: string; amount: number; discount?: number; method: string; notes?: string }) =>
     api.post<Payment>('/finance/payments', data),
@@ -322,8 +332,7 @@ export const loyaltyApi = {
 // Inventory API (premium module — expect isPremiumLockedError on a básico plan)
 export const inventoryApi = {
   listProducts: (params?: { category?: string; lowStock?: boolean; search?: string }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<any[]>(`/inventory/products${qs ? `?${qs}` : ''}`);
+    return api.get<any[]>(`/inventory/products${buildQuery(params)}`);
   },
   getProduct: (id: string) => api.get<any>(`/inventory/products/${id}`),
   createProduct: (data: Record<string, unknown>) => api.post<any>('/inventory/products', data),
@@ -333,8 +342,7 @@ export const inventoryApi = {
   lowStockAlerts: () => api.get<any>('/inventory/alerts/low-stock'),
   getStats: () => api.get<any>('/inventory/stats'),
   listMovements: (params?: { productId?: string; type?: string }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<any[]>(`/inventory/movements${qs ? `?${qs}` : ''}`);
+    return api.get<any[]>(`/inventory/movements${buildQuery(params)}`);
   },
 };
 
@@ -365,12 +373,113 @@ export const automationApi = {
   delete: (id: string) => api.delete<{ message: string }>(`/automation/${id}`),
 };
 
+// Professional profile & dashboard API
+export interface ProfessionalGoal {
+  id: string;
+  type: string;
+  targetValue: number;
+  currentValue: number;
+  bonusAmount?: number | null;
+  isAchieved?: boolean;
+  month: number;
+  year: number;
+}
+
+export interface ProfessionalBadge {
+  id: string;
+  type: string;
+  name: string;
+  description?: string | null;
+  iconUrl?: string | null;
+  earnedAt: string;
+}
+
+export interface ProfessionalRankingEntry {
+  id: string;
+  userId: string;
+  position: number | null;
+  revenue: number;
+  appointments: number;
+  newClients: number;
+  averageRating: number;
+  user?: { name: string };
+}
+
+export interface ProfessionalDashboard {
+  thisMonth: {
+    appointments: number;
+    revenue: number;
+    commission: number;
+    uniqueClients: number;
+  };
+  ratings: { average: number; total: number };
+  ranking: ProfessionalRankingEntry | null;
+  goals: ProfessionalGoal[];
+  loyalClients: Array<{ id: string; name: string; phone: string; visits: number }>;
+}
+
+export interface ProfessionalProfile {
+  id: string;
+  userId: string;
+  slug: string;
+  referralCode: string;
+  bio?: string | null;
+  specialties: string[];
+  photoUrl?: string | null;
+  coverPhotoUrl?: string | null;
+  instagramUrl?: string | null;
+  facebookUrl?: string | null;
+  tiktokUrl?: string | null;
+  portfolioImages: string[];
+  isPublic: boolean;
+  totalAppointments: number;
+  totalClients: number;
+  averageRating: number;
+  totalRatings: number;
+  clientsReferred: number;
+  badges: ProfessionalBadge[];
+  goals: ProfessionalGoal[];
+}
+
+export const professionalApi = {
+  getProfile: () => api.get<ProfessionalProfile>('/professional/profile'),
+  updateProfile: (data: Partial<{
+    bio: string;
+    specialties: string[];
+    photoUrl: string;
+    coverPhotoUrl: string;
+    instagramUrl: string;
+    facebookUrl: string;
+    tiktokUrl: string;
+    portfolioImages: string[];
+    isPublic: boolean;
+  }>) => api.put<ProfessionalProfile>('/professional/profile', data),
+  getDashboard: () => api.get<ProfessionalDashboard>('/professional/dashboard'),
+  getGoals: (month?: number, year?: number) => {
+    const qs = new URLSearchParams({ ...(month && { month: String(month) }), ...(year && { year: String(year) }) }).toString();
+    return api.get<ProfessionalGoal[]>(`/professional/goals${qs ? `?${qs}` : ''}`);
+  },
+  getRanking: (month?: number, year?: number) => {
+    const qs = new URLSearchParams({ ...(month && { month: String(month) }), ...(year && { year: String(year) }) }).toString();
+    return api.get<ProfessionalRankingEntry[]>(`/professional/ranking${qs ? `?${qs}` : ''}`);
+  },
+  getBadges: () => api.get<ProfessionalBadge[]>('/professional/badges'),
+  respondToRating: (ratingId: string, response: string) =>
+    api.post<any>(`/professional/ratings/${ratingId}/respond`, { response }),
+  getMarketing: () => api.get<any>('/professional/marketing'),
+  getMarketingClients: (period?: 'week' | 'month' | 'year') =>
+    api.get<any>(`/professional/marketing/clients${period ? `?period=${period}` : ''}`),
+  getMarketingStats: () => api.get<any>('/professional/marketing/stats'),
+  // Premium module (MARKETING) — expect isPremiumLockedError on a básico plan
+  sendMarketing: (data: { message?: string; clientIds?: string[]; templateId?: string }) =>
+    api.post<any>('/professional/marketing/send', data),
+};
+
 // Waitlist API
 export const waitlistApi = {
   getStats: () => api.get<any>('/waitlist/stats'),
   list: (params?: { date?: string; status?: string }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<any[]>(`/waitlist${qs ? `?${qs}` : ''}`);
+    return api.get<any[]>(`/waitlist${buildQuery(params)}`);
   },
   create: (data: { clientId: string; serviceId: string; professionalId?: string; desiredDate: string; desiredPeriod?: string }) =>
     api.post<any>('/waitlist', data),
