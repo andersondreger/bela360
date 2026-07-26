@@ -45,11 +45,15 @@ const sendMarketingMessageSchema = z.object({
   templateId: z.string().cuid().optional(),
 });
 
+function fail(res: Response, status: number, message: string, details?: unknown) {
+  res.status(status).json({ success: false, error: { message, details } });
+}
+
 function handleRouteError(error: unknown, res: Response, fallbackMessage: string) {
   if (error instanceof z.ZodError) {
-    return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+    return fail(res, 400, 'Dados inválidos', error.errors);
   }
-  res.status(500).json({ error: fallbackMessage });
+  fail(res, 500, fallbackMessage);
 }
 
 // Get professional profile
@@ -73,7 +77,7 @@ router.get('/profile', async (req: Request, res: Response) => {
     if (!profile) {
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
-        return res.status(404).json({ error: 'Usuário não encontrado' });
+        return fail(res, 404, 'Usuário não encontrado');
       }
 
       const slug = user.name
@@ -96,9 +100,9 @@ router.get('/profile', async (req: Request, res: Response) => {
       });
     }
 
-    res.json(profile);
+    res.json({ success: true, data: profile });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar perfil' });
+    handleRouteError(error, res, 'Erro ao buscar perfil');
   }
 });
 
@@ -123,7 +127,7 @@ router.put('/profile', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(profile);
+    res.json({ success: true, data: profile });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao atualizar perfil');
   }
@@ -155,7 +159,7 @@ router.get('/public/:slug', async (req: Request, res: Response) => {
     });
 
     if (!profile || !profile.isPublic) {
-      return res.status(404).json({ error: 'Perfil não encontrado' });
+      return fail(res, 404, 'Perfil não encontrado');
     }
 
     const ratings = await prisma.clientRating.findMany({
@@ -171,9 +175,9 @@ router.get('/public/:slug', async (req: Request, res: Response) => {
       },
     });
 
-    res.json({ ...profile, ratings });
+    res.json({ success: true, data: { ...profile, ratings } });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar perfil público' });
+    handleRouteError(error, res, 'Erro ao buscar perfil público');
   }
 });
 
@@ -244,25 +248,28 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     });
 
     res.json({
-      thisMonth: {
-        appointments: appointments.length,
-        revenue: payments._sum.finalAmount || 0,
-        commission: payments._sum.commissionAmount || 0,
-        uniqueClients,
+      success: true,
+      data: {
+        thisMonth: {
+          appointments: appointments.length,
+          revenue: payments._sum.finalAmount || 0,
+          commission: payments._sum.commissionAmount || 0,
+          uniqueClients,
+        },
+        ratings: {
+          average: ratings._avg.rating || 0,
+          total: ratings._count,
+        },
+        ranking,
+        goals,
+        loyalClients: loyalClients.map(c => ({
+          ...c,
+          visits: clientAppointments.find(ca => ca.clientId === c.id)?._count || 0,
+        })),
       },
-      ratings: {
-        average: ratings._avg.rating || 0,
-        total: ratings._count,
-      },
-      ranking,
-      goals,
-      loyalClients: loyalClients.map(c => ({
-        ...c,
-        visits: clientAppointments.find(ca => ca.clientId === c.id)?._count || 0,
-      })),
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar dashboard' });
+    handleRouteError(error, res, 'Erro ao buscar dashboard');
   }
 });
 
@@ -280,7 +287,7 @@ router.get('/goals', async (req: Request, res: Response) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'Perfil não encontrado' });
+      return fail(res, 404, 'Perfil não encontrado');
     }
 
     const goals = await prisma.professionalGoal.findMany({
@@ -291,9 +298,9 @@ router.get('/goals', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(goals);
+    res.json({ success: true, data: goals });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar metas' });
+    handleRouteError(error, res, 'Erro ao buscar metas');
   }
 });
 
@@ -301,7 +308,7 @@ router.get('/goals', async (req: Request, res: Response) => {
 router.post('/goals/:userId', async (req: Request, res: Response) => {
   try {
     if (req.user!.role !== 'OWNER' && req.user!.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Apenas o proprietário pode definir metas' });
+      return fail(res, 403, 'Apenas o proprietário pode definir metas');
     }
 
     const businessId = req.user!.businessId;
@@ -313,7 +320,7 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
     });
 
     if (!targetUser) {
-      return res.status(404).json({ error: 'Profissional não encontrado' });
+      return fail(res, 404, 'Profissional não encontrado');
     }
 
     const profile = await prisma.professionalProfile.findUnique({
@@ -321,7 +328,7 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'Perfil não encontrado' });
+      return fail(res, 404, 'Perfil não encontrado');
     }
 
     const goal = await prisma.professionalGoal.upsert({
@@ -348,7 +355,7 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(goal);
+    res.json({ success: true, data: goal });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao salvar meta');
   }
@@ -375,9 +382,9 @@ router.get('/ranking', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(rankings);
+    res.json({ success: true, data: rankings });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar ranking' });
+    handleRouteError(error, res, 'Erro ao buscar ranking');
   }
 });
 
@@ -475,9 +482,9 @@ router.post('/ranking/calculate', async (req: Request, res: Response) => {
       )
     );
 
-    res.json({ success: true, count: rankingData.length });
+    res.json({ success: true, data: { count: rankingData.length } });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao calcular ranking' });
+    handleRouteError(error, res, 'Erro ao calcular ranking');
   }
 });
 
@@ -491,9 +498,9 @@ router.get('/badges', async (req: Request, res: Response) => {
       include: { badges: { orderBy: { earnedAt: 'desc' } } },
     });
 
-    res.json(profile?.badges || []);
+    res.json({ success: true, data: profile?.badges || [] });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar badges' });
+    handleRouteError(error, res, 'Erro ao buscar badges');
   }
 });
 
@@ -501,7 +508,7 @@ router.get('/badges', async (req: Request, res: Response) => {
 router.post('/badges/:userId', async (req: Request, res: Response) => {
   try {
     if (req.user!.role !== 'OWNER' && req.user!.role !== 'ADMIN') {
-      return res.status(403).json({ error: 'Apenas o proprietário pode conceder badges' });
+      return fail(res, 403, 'Apenas o proprietário pode conceder badges');
     }
 
     const businessId = req.user!.businessId;
@@ -513,7 +520,7 @@ router.post('/badges/:userId', async (req: Request, res: Response) => {
     });
 
     if (!targetUser) {
-      return res.status(404).json({ error: 'Profissional não encontrado' });
+      return fail(res, 404, 'Profissional não encontrado');
     }
 
     const profile = await prisma.professionalProfile.findUnique({
@@ -521,7 +528,7 @@ router.post('/badges/:userId', async (req: Request, res: Response) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'Perfil não encontrado' });
+      return fail(res, 404, 'Perfil não encontrado');
     }
 
     const badge = await prisma.professionalBadge.create({
@@ -536,7 +543,7 @@ router.post('/badges/:userId', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(badge);
+    res.json({ success: true, data: badge });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao criar badge');
   }
@@ -554,7 +561,7 @@ router.post('/ratings/:ratingId/respond', async (req: Request, res: Response) =>
     });
 
     if (!rating || rating.professionalId !== userId) {
-      return res.status(404).json({ error: 'Avaliação não encontrada' });
+      return fail(res, 404, 'Avaliação não encontrada');
     }
 
     const updated = await prisma.clientRating.update({
@@ -565,7 +572,7 @@ router.post('/ratings/:ratingId/respond', async (req: Request, res: Response) =>
       },
     });
 
-    res.json(updated);
+    res.json({ success: true, data: updated });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao responder avaliação');
   }
@@ -582,7 +589,7 @@ router.post('/referral/:referralCode', async (req: Request, res: Response) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'Código de indicação inválido' });
+      return fail(res, 404, 'Código de indicação inválido');
     }
 
     await prisma.professionalProfile.update({
@@ -592,9 +599,9 @@ router.post('/referral/:referralCode', async (req: Request, res: Response) => {
       },
     });
 
-    res.json({ success: true, professionalId: profile.userId });
+    res.json({ success: true, data: { professionalId: profile.userId } });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao registrar indicação' });
+    handleRouteError(error, res, 'Erro ao registrar indicação');
   }
 });
 
@@ -618,7 +625,7 @@ router.get('/marketing', async (req: Request, res: Response) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'Perfil não encontrado' });
+      return fail(res, 404, 'Perfil não encontrado');
     }
 
     // Generate marketing links
@@ -633,22 +640,25 @@ router.get('/marketing', async (req: Request, res: Response) => {
     };
 
     res.json({
-      profile: {
-        slug: profile.slug,
-        referralCode: profile.referralCode,
-        isPublic: profile.isPublic,
-        bio: profile.bio,
-        photoUrl: profile.photoUrl,
-      },
-      links: marketingLinks,
-      stats: {
-        clientsReferred: profile.clientsReferred,
-        totalAppointments: profile.totalAppointments,
-        totalClients: profile.totalClients,
+      success: true,
+      data: {
+        profile: {
+          slug: profile.slug,
+          referralCode: profile.referralCode,
+          isPublic: profile.isPublic,
+          bio: profile.bio,
+          photoUrl: profile.photoUrl,
+        },
+        links: marketingLinks,
+        stats: {
+          clientsReferred: profile.clientsReferred,
+          totalAppointments: profile.totalAppointments,
+          totalClients: profile.totalClients,
+        },
       },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar informacoes de marketing' });
+    handleRouteError(error, res, 'Erro ao buscar informacoes de marketing');
   }
 });
 
@@ -731,17 +741,20 @@ router.get('/marketing/clients', async (req: Request, res: Response) => {
     const avgSpent = newClients.length > 0 ? totalRevenue / newClients.length : 0;
 
     res.json({
-      period,
-      startDate,
-      clients: newClients,
-      stats: {
-        totalNewClients: newClients.length,
-        totalRevenue,
-        averageSpentPerClient: avgSpent,
+      success: true,
+      data: {
+        period,
+        startDate,
+        clients: newClients,
+        stats: {
+          totalNewClients: newClients.length,
+          totalRevenue,
+          averageSpentPerClient: avgSpent,
+        },
       },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar clientes captados' });
+    handleRouteError(error, res, 'Erro ao buscar clientes captados');
   }
 });
 
@@ -760,7 +773,7 @@ router.get('/marketing/stats', async (req: Request, res: Response) => {
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'Perfil não encontrado' });
+      return fail(res, 404, 'Perfil não encontrado');
     }
 
     // Count new clients this month vs last month
@@ -817,23 +830,26 @@ router.get('/marketing/stats', async (req: Request, res: Response) => {
       : thisMonthClients.length > 0 ? 100 : 0;
 
     res.json({
-      referrals: profile.clientsReferred,
-      totalAppointments: profile.totalAppointments,
-      thisMonth: {
-        uniqueClients: thisMonthClients.length,
+      success: true,
+      data: {
+        referrals: profile.clientsReferred,
+        totalAppointments: profile.totalAppointments,
+        thisMonth: {
+          uniqueClients: thisMonthClients.length,
+        },
+        lastMonth: {
+          uniqueClients: lastMonthClients.length,
+        },
+        allTime: {
+          totalClients: totalClients.length,
+          returningClients,
+          returnRate: Math.round(returnRate * 10) / 10,
+        },
+        growth: Math.round(growth * 10) / 10,
       },
-      lastMonth: {
-        uniqueClients: lastMonthClients.length,
-      },
-      allTime: {
-        totalClients: totalClients.length,
-        returningClients,
-        returnRate: Math.round(returnRate * 10) / 10,
-      },
-      growth: Math.round(growth * 10) / 10,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar estatísticas de marketing' });
+    handleRouteError(error, res, 'Erro ao buscar estatísticas de marketing');
   }
 });
 
@@ -841,7 +857,7 @@ router.get('/marketing/stats', async (req: Request, res: Response) => {
 router.post('/public/:slug/view', async (_req: Request, res: Response) => {
   // Profile views tracking removed - not in schema
   // Could be added via separate analytics service if needed
-  res.json({ success: true });
+  res.json({ success: true, data: { tracked: true } });
 });
 
 // Send promotional message to professional's clients
@@ -858,7 +874,7 @@ router.post('/marketing/send', requirePremiumModule(PlatformModule.MARKETING), a
     });
 
     if (!business?.whatsappInstanceId || !business.whatsappConnected) {
-      return res.status(400).json({ error: 'WhatsApp não configurado' });
+      return fail(res, 400, 'WhatsApp não configurado');
     }
 
     // Get professional info
@@ -912,8 +928,8 @@ router.post('/marketing/send', requirePremiumModule(PlatformModule.MARKETING), a
 
     res.json({
       success: true,
-      message: `${results.queued} mensagens serão enviadas`,
       data: results,
+      message: `${results.queued} mensagens serão enviadas`,
     });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao enviar mensagens');

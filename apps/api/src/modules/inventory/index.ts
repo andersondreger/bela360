@@ -36,11 +36,15 @@ const linkServiceSchema = z.object({
   quantityUsed: z.number().positive(),
 });
 
+function fail(res: Response, status: number, message: string, details?: unknown) {
+  res.status(status).json({ success: false, error: { message, details } });
+}
+
 function handleRouteError(error: unknown, res: Response, fallbackMessage: string) {
   if (error instanceof z.ZodError) {
-    return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+    return fail(res, 400, 'Dados inválidos', error.errors);
   }
-  res.status(500).json({ error: fallbackMessage });
+  fail(res, 500, fallbackMessage);
 }
 
 // List all products
@@ -66,12 +70,15 @@ router.get('/products', async (req: Request, res: Response) => {
     });
 
     if (lowStock === 'true') {
-      return res.json(products.filter(p => Number(p.currentStock) <= Number(p.minStock)));
+      return res.json({
+        success: true,
+        data: products.filter(p => Number(p.currentStock) <= Number(p.minStock)),
+      });
     }
 
-    res.json(products);
+    res.json({ success: true, data: products });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar produtos' });
+    handleRouteError(error, res, 'Erro ao buscar produtos');
   }
 });
 
@@ -96,12 +103,12 @@ router.get('/products/:id', async (req: Request, res: Response) => {
     });
 
     if (!product) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return fail(res, 404, 'Produto não encontrado');
     }
 
-    res.json(product);
+    res.json({ success: true, data: product });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar produto' });
+    handleRouteError(error, res, 'Erro ao buscar produto');
   }
 });
 
@@ -146,7 +153,7 @@ router.post('/products', async (req: Request, res: Response) => {
       });
     }
 
-    res.json(product);
+    res.json({ success: true, data: product });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao criar produto');
   }
@@ -161,7 +168,7 @@ router.put('/products/:id', async (req: Request, res: Response) => {
 
     const existing = await prisma.product.findFirst({ where: { id, businessId } });
     if (!existing) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return fail(res, 404, 'Produto não encontrado');
     }
 
     const product = await prisma.product.update({
@@ -183,7 +190,7 @@ router.put('/products/:id', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(product);
+    res.json({ success: true, data: product });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao atualizar produto');
   }
@@ -202,7 +209,7 @@ router.post('/products/:id/movement', async (req: Request, res: Response) => {
     });
 
     if (!product) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return fail(res, 404, 'Produto não encontrado');
     }
 
     const isIncoming = ['PURCHASE', 'RETURN', 'ADJUSTMENT'].includes(type) && quantity > 0;
@@ -210,7 +217,7 @@ router.post('/products/:id/movement', async (req: Request, res: Response) => {
     const newStock = Number(product.currentStock) + quantityChange;
 
     if (newStock < 0) {
-      return res.status(400).json({ error: 'Estoque insuficiente' });
+      return fail(res, 400, 'Estoque insuficiente');
     }
 
     const [movement, updatedProduct] = await prisma.$transaction([
@@ -235,7 +242,7 @@ router.post('/products/:id/movement', async (req: Request, res: Response) => {
       }),
     ]);
 
-    res.json({ movement, product: updatedProduct });
+    res.json({ success: true, data: { movement, product: updatedProduct } });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao registrar movimentação');
   }
@@ -254,7 +261,7 @@ router.post('/products/:productId/services/:serviceId', async (req: Request, res
     ]);
 
     if (!product || !service) {
-      return res.status(404).json({ error: 'Produto ou serviço não encontrado' });
+      return fail(res, 404, 'Produto ou serviço não encontrado');
     }
 
     const serviceProduct = await prisma.serviceProduct.upsert({
@@ -263,7 +270,7 @@ router.post('/products/:productId/services/:serviceId', async (req: Request, res
       update: { quantityUsed },
     });
 
-    res.json(serviceProduct);
+    res.json({ success: true, data: serviceProduct });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao vincular produto');
   }
@@ -277,16 +284,16 @@ router.delete('/products/:productId/services/:serviceId', async (req: Request, r
 
     const product = await prisma.product.findFirst({ where: { id: productId, businessId } });
     if (!product) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
+      return fail(res, 404, 'Produto não encontrado');
     }
 
     await prisma.serviceProduct.delete({
       where: { serviceId_productId: { serviceId, productId } },
     });
 
-    res.json({ success: true });
+    res.json({ success: true, data: { removed: true } });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao desvincular produto' });
+    handleRouteError(error, res, 'Erro ao desvincular produto');
   }
 });
 
@@ -308,9 +315,9 @@ router.get('/alerts/low-stock', async (req: Request, res: Response) => {
       return daysUntilExpiry <= 30 && daysUntilExpiry > 0;
     });
 
-    res.json({ lowStock, expiringSoon });
+    res.json({ success: true, data: { lowStock, expiringSoon } });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar alertas' });
+    handleRouteError(error, res, 'Erro ao buscar alertas');
   }
 });
 
@@ -361,15 +368,18 @@ router.get('/stats', async (req: Request, res: Response) => {
       }));
 
     res.json({
-      totalProducts,
-      lowStockCount,
-      totalStockValue,
-      monthlyPurchases: purchaseTotal,
-      monthlyUsage: usageTotal,
-      topConsumed,
+      success: true,
+      data: {
+        totalProducts,
+        lowStockCount,
+        totalStockValue,
+        monthlyPurchases: purchaseTotal,
+        monthlyUsage: usageTotal,
+        topConsumed,
+      },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+    handleRouteError(error, res, 'Erro ao buscar estatísticas');
   }
 });
 
@@ -398,9 +408,9 @@ router.get('/movements', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(movements);
+    res.json({ success: true, data: movements });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar movimentações' });
+    handleRouteError(error, res, 'Erro ao buscar movimentações');
   }
 });
 

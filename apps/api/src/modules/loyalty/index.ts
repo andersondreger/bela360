@@ -38,11 +38,15 @@ const createRewardSchema = z.object({
   maxRedemptions: z.number().int().positive().optional(),
 });
 
+function fail(res: Response, status: number, message: string, details?: unknown) {
+  res.status(status).json({ success: false, error: { message, details } });
+}
+
 function handleRouteError(error: unknown, res: Response, fallbackMessage: string) {
   if (error instanceof z.ZodError) {
-    return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+    return fail(res, 400, 'Dados inválidos', error.errors);
   }
-  res.status(500).json({ error: fallbackMessage });
+  fail(res, 500, fallbackMessage);
 }
 
 // Get loyalty program for business
@@ -61,12 +65,12 @@ router.get('/program', async (req: Request, res: Response) => {
     });
 
     if (!program) {
-      return res.status(404).json({ error: 'Programa de fidelidade não encontrado' });
+      return fail(res, 404, 'Programa de fidelidade não encontrado');
     }
 
-    res.json(program);
+    res.json({ success: true, data: program });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar programa' });
+    handleRouteError(error, res, 'Erro ao buscar programa');
   }
 });
 
@@ -96,7 +100,7 @@ router.post('/program', async (req: Request, res: Response) => {
       update: data,
     });
 
-    res.json(program);
+    res.json({ success: true, data: program });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao salvar programa');
   }
@@ -110,7 +114,7 @@ router.get('/clients/:clientId/points', async (req: Request, res: Response) => {
 
     const client = await prisma.client.findFirst({ where: { id: clientId, businessId } });
     if (!client) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return fail(res, 404, 'Cliente não encontrado');
     }
 
     let points = await prisma.loyaltyPoints.findUnique({
@@ -134,9 +138,9 @@ router.get('/clients/:clientId/points', async (req: Request, res: Response) => {
       });
     }
 
-    res.json(points);
+    res.json({ success: true, data: points });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar pontos' });
+    handleRouteError(error, res, 'Erro ao buscar pontos');
   }
 });
 
@@ -149,7 +153,7 @@ router.post('/clients/:clientId/points/add', async (req: Request, res: Response)
 
     const client = await prisma.client.findFirst({ where: { id: clientId, businessId } });
     if (!client) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return fail(res, 404, 'Cliente não encontrado');
     }
 
     const program = await prisma.loyaltyProgram.findUnique({
@@ -157,7 +161,7 @@ router.post('/clients/:clientId/points/add', async (req: Request, res: Response)
     });
 
     if (!program || !program.isActive) {
-      return res.status(400).json({ error: 'Programa de fidelidade não ativo' });
+      return fail(res, 400, 'Programa de fidelidade não ativo');
     }
 
     const pointsToAdd = Math.floor(amount * Number(program.pointsPerReal));
@@ -204,7 +208,7 @@ router.post('/clients/:clientId/points/add', async (req: Request, res: Response)
       }),
     ]);
 
-    res.json({ pointsAdded: pointsToAdd, newBalance, newTier });
+    res.json({ success: true, data: { pointsAdded: pointsToAdd, newBalance, newTier } });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao adicionar pontos');
   }
@@ -225,9 +229,9 @@ router.get('/rewards', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(program?.rewards || []);
+    res.json({ success: true, data: program?.rewards || [] });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar recompensas' });
+    handleRouteError(error, res, 'Erro ao buscar recompensas');
   }
 });
 
@@ -242,20 +246,20 @@ router.post('/rewards', async (req: Request, res: Response) => {
     });
 
     if (!program) {
-      return res.status(404).json({ error: 'Programa de fidelidade não encontrado' });
+      return fail(res, 404, 'Programa de fidelidade não encontrado');
     }
 
     if (data.serviceId) {
       const service = await prisma.service.findFirst({ where: { id: data.serviceId, businessId } });
       if (!service) {
-        return res.status(404).json({ error: 'Serviço não encontrado' });
+        return fail(res, 404, 'Serviço não encontrado');
       }
     }
 
     if (data.productId) {
       const product = await prisma.product.findFirst({ where: { id: data.productId, businessId } });
       if (!product) {
-        return res.status(404).json({ error: 'Produto não encontrado' });
+        return fail(res, 404, 'Produto não encontrado');
       }
     }
 
@@ -275,7 +279,7 @@ router.post('/rewards', async (req: Request, res: Response) => {
       },
     });
 
-    res.json(reward);
+    res.json({ success: true, data: reward });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao criar recompensa');
   }
@@ -289,7 +293,7 @@ router.post('/clients/:clientId/redeem/:rewardId', async (req: Request, res: Res
 
     const client = await prisma.client.findFirst({ where: { id: clientId, businessId } });
     if (!client) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return fail(res, 404, 'Cliente não encontrado');
     }
 
     const loyaltyPoints = await prisma.loyaltyPoints.findUnique({
@@ -297,7 +301,7 @@ router.post('/clients/:clientId/redeem/:rewardId', async (req: Request, res: Res
     });
 
     if (!loyaltyPoints) {
-      return res.status(404).json({ error: 'Pontos não encontrados' });
+      return fail(res, 404, 'Pontos não encontrados');
     }
 
     const reward = await prisma.loyaltyReward.findFirst({
@@ -305,11 +309,11 @@ router.post('/clients/:clientId/redeem/:rewardId', async (req: Request, res: Res
     });
 
     if (!reward || !reward.isActive) {
-      return res.status(404).json({ error: 'Recompensa não encontrada' });
+      return fail(res, 404, 'Recompensa não encontrada');
     }
 
     if (loyaltyPoints.currentPoints < reward.pointsCost) {
-      return res.status(400).json({ error: 'Pontos insuficientes' });
+      return fail(res, 400, 'Pontos insuficientes');
     }
 
     const couponCode = `BL${Date.now().toString(36).toUpperCase()}`;
@@ -351,9 +355,9 @@ router.post('/clients/:clientId/redeem/:rewardId', async (req: Request, res: Res
       }),
     ]);
 
-    res.json({ couponCode, expiresAt, reward });
+    res.json({ success: true, data: { couponCode, expiresAt, reward } });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao resgatar recompensa' });
+    handleRouteError(error, res, 'Erro ao resgatar recompensa');
   }
 });
 
@@ -383,21 +387,24 @@ router.get('/stats', async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      program,
-      stats: {
-        totalClients: totalPoints._count,
-        totalPointsActive: totalPoints._sum.currentPoints || 0,
-        totalPointsEarned: totalPoints._sum.totalEarned || 0,
-        totalPointsRedeemed: totalPoints._sum.totalRedeemed || 0,
+      success: true,
+      data: {
+        program,
+        stats: {
+          totalClients: totalPoints._count,
+          totalPointsActive: totalPoints._sum.currentPoints || 0,
+          totalPointsEarned: totalPoints._sum.totalEarned || 0,
+          totalPointsRedeemed: totalPoints._sum.totalRedeemed || 0,
+        },
+        tierDistribution: tierDistribution.reduce((acc, item) => {
+          acc[item.currentTier] = item._count;
+          return acc;
+        }, {} as Record<string, number>),
+        recentRedemptions,
       },
-      tierDistribution: tierDistribution.reduce((acc, item) => {
-        acc[item.currentTier] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      recentRedemptions,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+    handleRouteError(error, res, 'Erro ao buscar estatísticas');
   }
 });
 
