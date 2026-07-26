@@ -175,7 +175,7 @@ export class AppointmentsService {
       where: { id, businessId },
       include: {
         client: true,
-        professional: true,
+        professional: { select: { id: true, name: true, phone: true, color: true } },
         service: true,
         business: true,
       },
@@ -404,8 +404,8 @@ export class AppointmentsService {
     serviceId: string
   ): Promise<AvailabilitySlot[]> {
     // Get service duration
-    const service = await prisma.service.findUnique({
-      where: { id: serviceId },
+    const service = await prisma.service.findFirst({
+      where: { id: serviceId, businessId },
     });
 
     if (!service) {

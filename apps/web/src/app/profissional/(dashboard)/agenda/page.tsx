@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { Skeleton, SkeletonList } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/ui';
+import { appointmentsApi, type AppointmentStatus } from '@/lib/api';
+import { fetchCurrentUser } from '@/lib/auth';
 
 interface Appointment {
   id: string;
@@ -14,15 +16,24 @@ interface Appointment {
   clientPhone: string;
   serviceName: string;
   price: number;
-  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+  status: AppointmentStatus;
 }
 
 const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+
+function dayBounds(date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
 
 export default function ProfessionalAgendaPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Generate week dates
   const getWeekDates = () => {
@@ -41,50 +52,43 @@ export default function ProfessionalAgendaPage() {
   const weekDates = getWeekDates();
 
   useEffect(() => {
-    // Simulated data - in production would fetch from API
-    setAppointments([
-      {
-        id: '1',
-        time: '09:00',
-        endTime: '10:00',
-        clientName: 'Ana Paula',
-        clientPhone: '(11) 99999-1111',
-        serviceName: 'Corte Feminino',
-        price: 80,
-        status: 'CONFIRMED',
-      },
-      {
-        id: '2',
-        time: '10:30',
-        endTime: '11:00',
-        clientName: 'Carlos Lima',
-        clientPhone: '(11) 99999-2222',
-        serviceName: 'Corte Masculino',
-        price: 45,
-        status: 'CONFIRMED',
-      },
-      {
-        id: '3',
-        time: '14:00',
-        endTime: '15:00',
-        clientName: 'Maria Silva',
-        clientPhone: '(11) 99999-3333',
-        serviceName: 'Corte e Escova',
-        price: 140,
-        status: 'PENDING',
-      },
-      {
-        id: '4',
-        time: '16:00',
-        endTime: '18:00',
-        clientName: 'Fernanda Souza',
-        clientPhone: '(11) 99999-4444',
-        serviceName: 'Coloracao',
-        price: 180,
-        status: 'CONFIRMED',
-      },
-    ]);
-    setLoading(false);
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        const user = await fetchCurrentUser();
+        if (!user) throw new Error('Sessão expirada');
+
+        const { start, end } = dayBounds(selectedDate);
+        const data = await appointmentsApi.list({
+          professionalId: user.id,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        });
+
+        setAppointments(
+          data
+            .filter(a => a.status !== 'CANCELLED')
+            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+            .map(a => ({
+              id: a.id,
+              time: new Date(a.startTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              endTime: new Date(a.endTime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              clientName: a.client?.name || 'Cliente',
+              clientPhone: a.client?.phone || '',
+              serviceName: a.service?.name || 'Serviço',
+              price: Number(a.service?.price) || 0,
+              status: a.status,
+            }))
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar agenda');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
   }, [selectedDate]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -119,13 +123,19 @@ export default function ProfessionalAgendaPage() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatCurrency = (value: number | string) => {
+    return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   return (
     <div className="space-y-6">
       <PageHeader title="Minha Agenda" description="Seus atendimentos agendados" />
+
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Week Navigation */}
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">

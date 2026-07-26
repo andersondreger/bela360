@@ -121,8 +121,8 @@ export default function ClientesPage() {
     return new Date(dateStr).toLocaleDateString('pt-BR');
   };
 
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatCurrency = (value: number | string) => {
+    return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
   return (

@@ -498,8 +498,8 @@ export class WhatsAppController {
       const conversations = await Promise.all(
         clientIds.map(async clientId => {
           const [client, lastMessage, unreadCount] = await Promise.all([
-            prisma.client.findUnique({
-              where: { id: clientId },
+            prisma.client.findFirst({
+              where: { id: clientId, businessId },
               select: { id: true, name: true, phone: true },
             }),
             prisma.message.findFirst({
