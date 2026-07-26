@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   CalendarCheck,
   LineChart,
@@ -8,10 +9,17 @@ import {
   Wallet,
   CheckCircle2,
   ArrowRight,
+  ShieldCheck,
+  Zap,
+  Heart,
+  Gem,
+  Mail,
+  MapPin,
+  Phone,
 } from 'lucide-react';
 import { AuroraBackground, Logo, Button, Card } from '@/components/ui';
 
-const FEATURES = [
+const CAPABILITIES = [
   {
     icon: MessageCircle,
     title: 'Agendamento pelo WhatsApp',
@@ -43,8 +51,37 @@ const FEATURES = [
   {
     icon: Sparkles,
     title: 'Lembretes automáticos',
-    description: 'Menos faltas: lembrete de 24h e 2h antes do horário, enviado sozinho.',
+    description: 'Menos faltas: lembrete enviado sozinho antes do horário marcado.',
   },
+];
+
+const WHY_US = [
+  {
+    icon: Gem,
+    title: 'Feito para o seu nicho',
+    description: 'Salões, barbearias, clínicas de estética e spas. Não é um sistema genérico.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Seus dados protegidos',
+    description: 'Cada negócio é isolado no sistema. Ninguém vê dado de outro salão.',
+  },
+  {
+    icon: Zap,
+    title: 'Tecnologia de verdade',
+    description: 'Automação real rodando no WhatsApp, não uma promessa de roadmap.',
+  },
+  {
+    icon: Heart,
+    title: 'Feito para crescer com você',
+    description: 'Comece simples e libere marketing, fidelidade e estoque quando precisar.',
+  },
+];
+
+const GALLERY = [
+  { src: '/images/landing/service-color.jpg', label: 'Cabelo e coloração' },
+  { src: '/images/landing/service-nails.jpg', label: 'Unhas e manicure' },
+  { src: '/images/landing/service-wash.jpg', label: 'Tratamentos e spa' },
 ];
 
 const STEPS = [
@@ -65,15 +102,33 @@ const STEPS = [
   },
 ];
 
+const NAV_LINKS = [
+  { href: '#recursos', label: 'Recursos' },
+  { href: '#por-que', label: 'Por que o bela360' },
+  { href: '#como-funciona', label: 'Como funciona' },
+  { href: '#contato', label: 'Contato' },
+];
+
 export default function HomePage() {
   return (
     <main className="relative overflow-hidden">
       {/* Hero */}
-      <section className="relative flex min-h-screen flex-col overflow-hidden p-4">
+      <section id="topo" className="relative flex min-h-screen flex-col overflow-hidden p-4">
         <AuroraBackground />
 
         <nav className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between py-6">
           <Logo wordmarkClassName="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
+          <div className="hidden items-center gap-8 lg:flex">
+            {NAV_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium text-white/70 transition hover:text-white"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
           <div className="flex items-center gap-3">
             <Link
               href="/login"
@@ -87,42 +142,73 @@ export default function HomePage() {
           </div>
         </nav>
 
-        <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center py-16 text-center">
-          <span className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80">
-            <Sparkles className="h-3.5 w-3.5 text-bela-gold" />
-            Feito para salões, barbearias e clínicas de estética
-          </span>
-          <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl">
-            Automação completa para o seu{' '}
-            <span className="bg-gradient-to-r from-bela-pink via-bela-violet to-bela-gold bg-clip-text text-transparent">
-              negócio de beleza
+        <div className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-12 py-16 lg:grid-cols-2">
+          <div className="text-center lg:text-left">
+            <span className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80">
+              <Sparkles className="h-3.5 w-3.5 text-bela-gold" />
+              Feito para salões, barbearias e clínicas de estética
             </span>
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg text-white/70">
-            Agenda, clientes, financeiro e atendimento pelo WhatsApp, tudo automatizado em um
-            único painel. Menos tempo no caderno, mais tempo com suas clientes.
-          </p>
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-            <Link href="/onboarding">
-              <Button size="lg" className="w-full sm:w-auto">
-                Cadastre seu salão grátis
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button size="lg" variant="outline" className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto">
-                Já tenho conta
-              </Button>
-            </Link>
+            <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl">
+              Automação completa para o seu{' '}
+              <span className="bg-gradient-to-r from-bela-pink via-bela-violet to-bela-gold bg-clip-text text-transparent">
+                negócio de beleza
+              </span>
+            </h1>
+            <p className="mx-auto mt-6 max-w-xl text-lg text-white/70 lg:mx-0">
+              Agenda, clientes, financeiro e atendimento pelo WhatsApp, tudo automatizado em um
+              único painel. Menos tempo no caderno, mais tempo com suas clientes.
+            </p>
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+              <Link href="/onboarding">
+                <Button size="lg" className="w-full sm:w-auto">
+                  Cadastre seu salão grátis
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full border-white/20 text-white hover:bg-white/10 sm:w-auto"
+                >
+                  Já tenho conta
+                </Button>
+              </Link>
+            </div>
+            <p className="mt-6 text-xs text-white/40">
+              Sem cartão de crédito. Comece a usar em menos de 2 minutos.
+            </p>
           </div>
-          <p className="mt-6 text-xs text-white/40">
-            Sem cartão de crédito. Comece a usar em menos de 2 minutos.
-          </p>
+
+          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
+            <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-white/10 shadow-2xl">
+              <Image
+                src="/images/landing/hero-styling.jpg"
+                alt="Profissional de salão finalizando um penteado"
+                fill
+                priority
+                sizes="(max-width: 1024px) 90vw, 500px"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-bela-plum/60 via-transparent to-transparent" />
+            </div>
+            <div className="glass-dark noise-overlay absolute -bottom-6 -left-6 hidden rounded-2xl p-4 shadow-2xl sm:block">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand text-white">
+                  <CalendarCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Confirmado no WhatsApp</p>
+                  <p className="text-xs text-white/60">Sem ligação, sem esquecer</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="relative bg-background py-24">
+      {/* Capabilities / "Recursos" */}
+      <section id="recursos" className="relative bg-background py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold sm:text-4xl">Tudo que o seu salão precisa</h2>
@@ -133,7 +219,7 @@ export default function HomePage() {
           </div>
 
           <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((feature) => (
+            {CAPABILITIES.map((feature) => (
               <Card key={feature.title} className="p-6">
                 <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
                   <feature.icon className="h-5 w-5" />
@@ -146,8 +232,138 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Why us */}
+      <section id="por-que" className="relative overflow-hidden bg-bela-plum py-24">
+        <AuroraBackground variant="subtle" />
+        <div className="relative mx-auto w-full max-w-6xl px-4">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Por que escolher o bela360</h2>
+          </div>
+
+          <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {WHY_US.map((item) => (
+              <div key={item.title} className="glass-dark noise-overlay rounded-2xl p-6 text-center">
+                <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-semibold text-white">{item.title}</h3>
+                <p className="mt-2 text-sm text-white/70">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Product preview */}
+      <section className="relative bg-background py-24">
+        <div className="mx-auto w-full max-w-6xl px-4">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold sm:text-4xl">Um painel, tudo organizado</h2>
+            <p className="mt-4 text-muted-foreground">
+              Agenda, financeiro e conversas em um só lugar, com o visual do bela360.
+            </p>
+          </div>
+
+          <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <Card className="overflow-hidden">
+              <div className="border-b border-border bg-muted/40 p-4">
+                <div className="flex items-center gap-2">
+                  <CalendarCheck className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">Agenda de hoje</span>
+                </div>
+              </div>
+              <div className="space-y-2 p-4">
+                {['09:00 · Corte + Escova', '10:30 · Coloração', '14:00 · Manicure'].map((row) => (
+                  <div
+                    key={row}
+                    className="rounded-lg border border-border bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                  >
+                    {row}
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <div className="border-b border-border bg-muted/40 p-4">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">Financeiro do mês</span>
+                </div>
+              </div>
+              <div className="space-y-3 p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Receita</span>
+                  <span className="font-semibold text-emerald-600">R$ 8.240</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Comissões</span>
+                  <span className="font-semibold text-amber-600">R$ 2.470</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
+                  <span className="text-muted-foreground">Lucro do salão</span>
+                  <span className="font-semibold text-primary">R$ 5.770</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <div className="border-b border-border bg-muted/40 p-4">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">WhatsApp</span>
+                </div>
+              </div>
+              <div className="space-y-2 p-4 text-xs">
+                <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-sm bg-gradient-brand px-3 py-2 text-white">
+                  Seu horário amanhã às 14h está confirmado ✅
+                </div>
+                <div className="mr-auto max-w-[80%] rounded-2xl rounded-tl-sm bg-muted px-3 py-2">
+                  Perfeito, obrigada!
+                </div>
+              </div>
+            </Card>
+          </div>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Ilustração do painel do bela360. As telas reais do sistema se adaptam ao seu negócio.
+          </p>
+        </div>
+      </section>
+
+      {/* Gallery */}
+      <section className="relative bg-muted/30 py-24">
+        <div className="mx-auto w-full max-w-6xl px-4">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold sm:text-4xl">Para todo tipo de negócio de beleza</h2>
+            <p className="mt-4 text-muted-foreground">
+              Salão, barbearia, clínica de estética ou spa: o bela360 se adapta ao seu atendimento.
+            </p>
+          </div>
+          <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-3">
+            {GALLERY.map((item) => (
+              <div
+                key={item.label}
+                className="group relative aspect-[3/4] overflow-hidden rounded-2xl shadow-sm"
+              >
+                <Image
+                  src={item.src}
+                  alt={item.label}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 33vw"
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
+                <p className="absolute bottom-4 left-4 text-sm font-semibold text-white">
+                  {item.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* How it works */}
-      <section className="relative overflow-hidden bg-bela-plum py-24">
+      <section id="como-funciona" className="relative overflow-hidden bg-bela-plum py-24">
         <AuroraBackground variant="subtle" />
         <div className="relative mx-auto w-full max-w-6xl px-4">
           <div className="mx-auto max-w-2xl text-center">
@@ -195,11 +411,104 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Final CTA */}
+      <section id="contato" className="relative overflow-hidden bg-background py-24">
+        <div className="mx-auto w-full max-w-4xl px-4 text-center">
+          <h2 className="text-3xl font-bold sm:text-4xl">Pronta para automatizar seu salão?</h2>
+          <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+            Cadastre seu negócio agora e comece a atender pelo WhatsApp ainda hoje.
+          </p>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link href="/onboarding">
+              <Button size="lg" className="w-full sm:w-auto">
+                Cadastre seu salão grátis
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <a href="mailto:atendimento@wayia.com.br">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                Falar com a gente
+              </Button>
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="border-t border-border bg-background py-10">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row">
-          <Logo mark={false} wordmarkClassName="text-foreground" />
-          <p>© {new Date().getFullYear()} bela360. Todos os direitos reservados.</p>
+      <footer className="border-t border-border bg-background py-12">
+        <div className="mx-auto w-full max-w-6xl px-4">
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Logo mark={true} wordmarkClassName="text-foreground" />
+              <p className="mt-4 text-sm text-muted-foreground">
+                Automação completa para salões, barbearias e clínicas de estética.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold">Navegação</h3>
+              <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                {NAV_LINKS.map((link) => (
+                  <li key={link.href}>
+                    <a href={link.href} className="transition hover:text-foreground">
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold">Acesso</h3>
+              <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                <li>
+                  <Link href="/login" className="transition hover:text-foreground">
+                    Entrar
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/onboarding" className="transition hover:text-foreground">
+                    Cadastrar salão
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/profissional" className="transition hover:text-foreground">
+                    Entrar como profissional
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold">Contato</h3>
+              <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-bela-violet" />
+                  <span>Rua Tiradentes, Matelândia, PR</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 shrink-0 text-bela-violet" />
+                  <a href="tel:+554591397543" className="transition hover:text-foreground">
+                    (45) 9 9139-7543
+                  </a>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 shrink-0 text-bela-violet" />
+                  <a
+                    href="mailto:atendimento@wayia.com.br"
+                    className="transition hover:text-foreground"
+                  >
+                    atendimento@wayia.com.br
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 text-xs text-muted-foreground sm:flex-row">
+            <p>© {new Date().getFullYear()} bela360. Todos os direitos reservados.</p>
+            <p>Feito pelo ecossistema WayIA.</p>
+          </div>
         </div>
       </footer>
     </main>

@@ -26,7 +26,7 @@ function formatPhone(value: string) {
 }
 
 export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
-  const [mode, setMode] = useState<'otp' | 'password'>('otp');
+  const [mode, setMode] = useState<'otp' | 'password'>('password');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
