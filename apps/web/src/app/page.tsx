@@ -1,3 +1,6 @@
+'use client';
+
+import { useRef, Fragment } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -18,6 +21,27 @@ import {
   Phone,
 } from 'lucide-react';
 import { AuroraBackground, Logo, Button, Card } from '@/components/ui';
+import { useScrollFilm } from '@/lib/useScrollFilm';
+
+/**
+ * Splits a phrase into one <span data-hero-word> per word, for the hero's staggered
+ * reveal. `wordClassName` is applied to every word span, not the wrapper, so a
+ * gradient bg-clip-text effect still paints correctly (it breaks across nested
+ * inline-block boxes if only the parent carries the gradient classes).
+ */
+function SplitWords({ text, wordClassName }: { text: string; wordClassName?: string }) {
+  return (
+    <>
+      {text.split(' ').map((word, i) => (
+        <Fragment key={i}>
+          <span data-hero-word className={`inline-block ${wordClassName ?? ''}`}>
+            {word}
+          </span>{' '}
+        </Fragment>
+      ))}
+    </>
+  );
+}
 
 const CAPABILITIES = [
   {
@@ -110,62 +134,74 @@ const NAV_LINKS = [
 ];
 
 export default function HomePage() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useScrollFilm(containerRef);
+
   return (
-    <main className="relative overflow-hidden">
+    <main ref={containerRef} className="relative overflow-hidden">
       {/* Hero */}
       <section id="topo" className="relative flex min-h-screen flex-col overflow-hidden p-4">
         <AuroraBackground />
 
-        <nav className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between py-6">
-          <Logo wordmarkClassName="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
-          <div className="hidden items-center gap-8 lg:flex">
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-sm font-medium text-white/70 transition hover:text-white"
+        <nav
+          data-nav
+          className="fixed inset-x-0 top-0 z-30 transition-colors duration-300 data-[scrolled=true]:bg-bela-plum/80 data-[scrolled=true]:backdrop-blur-xl data-[scrolled=true]:shadow-lg"
+        >
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
+            <Logo wordmarkClassName="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
+            <div className="hidden items-center gap-8 lg:flex">
+              {NAV_LINKS.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm font-medium text-white/70 transition hover:text-white"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/login"
+                className="text-sm font-medium text-white/80 transition hover:text-white"
               >
-                {link.label}
-              </a>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-white/80 transition hover:text-white"
-            >
-              Entrar
-            </Link>
-            <Link href="/onboarding">
-              <Button size="sm">Cadastrar salão grátis</Button>
-            </Link>
+                Entrar
+              </Link>
+              <Link href="/onboarding">
+                <Button size="sm">Cadastrar salão grátis</Button>
+              </Link>
+            </div>
           </div>
         </nav>
 
-        <div className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-12 py-16 lg:grid-cols-2">
-          <div className="text-center lg:text-left">
-            <span className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80">
+        <div className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-12 pb-16 pt-28 lg:grid-cols-2">
+          <div data-hero-exit className="text-center lg:text-left">
+            <span
+              data-hero-badge
+              className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-medium text-white/80"
+            >
               <Sparkles className="h-3.5 w-3.5 text-bela-gold" />
               Feito para salões, barbearias e clínicas de estética
             </span>
             <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl">
-              Automação completa para o seu{' '}
-              <span className="bg-gradient-to-r from-bela-pink via-bela-violet to-bela-gold bg-clip-text text-transparent">
-                negócio de beleza
-              </span>
+              <SplitWords text="Automação completa para o seu" />
+              <SplitWords
+                text="negócio de beleza"
+                wordClassName="bg-gradient-to-r from-bela-pink via-bela-violet to-bela-gold bg-clip-text text-transparent"
+              />
             </h1>
-            <p className="mx-auto mt-6 max-w-xl text-lg text-white/70 lg:mx-0">
+            <p data-hero-copy className="mx-auto mt-6 max-w-xl text-lg text-white/70 lg:mx-0">
               Agenda, clientes, financeiro e atendimento pelo WhatsApp, tudo automatizado em um
               único painel. Menos tempo no caderno, mais tempo com suas clientes.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-              <Link href="/onboarding">
+              <Link href="/onboarding" data-hero-cta>
                 <Button size="lg" className="w-full sm:w-auto">
                   Cadastre seu salão grátis
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/login">
+              <Link href="/login" data-hero-cta>
                 <Button
                   size="lg"
                   variant="outline"
@@ -180,19 +216,25 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-            <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-white/10 shadow-2xl">
+          <div data-hero-exit className="relative mx-auto w-full max-w-sm lg:max-w-[380px]">
+            <div
+              data-hero-image
+              className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-white/10 shadow-2xl"
+            >
               <Image
                 src="/images/landing/hero-styling.jpg"
                 alt="Profissional de salão finalizando um penteado"
                 fill
                 priority
-                sizes="(max-width: 1024px) 90vw, 500px"
+                sizes="(max-width: 1024px) 70vw, 380px"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-bela-plum/60 via-transparent to-transparent" />
             </div>
-            <div className="glass-dark noise-overlay absolute -bottom-6 -left-6 hidden rounded-2xl p-4 shadow-2xl sm:block">
+            <div
+              data-hero-float
+              className="glass-dark noise-overlay absolute -bottom-6 -left-6 hidden rounded-2xl p-4 shadow-2xl sm:block"
+            >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand text-white">
                   <CalendarCheck className="h-5 w-5" />
@@ -210,7 +252,7 @@ export default function HomePage() {
       {/* Capabilities / "Recursos" */}
       <section id="recursos" className="relative bg-background py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
-          <div className="mx-auto max-w-2xl text-center">
+          <div data-reveal className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold sm:text-4xl">Tudo que o seu salão precisa</h2>
             <p className="mt-4 text-muted-foreground">
               Substitua a agenda de papel, os grupos de WhatsApp bagunçados e as planilhas por um
@@ -218,9 +260,9 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div data-reveal-group className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {CAPABILITIES.map((feature) => (
-              <Card key={feature.title} className="p-6">
+              <Card key={feature.title} data-reveal-item className="p-6">
                 <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
                   <feature.icon className="h-5 w-5" />
                 </div>
@@ -236,13 +278,13 @@ export default function HomePage() {
       <section id="por-que" className="relative overflow-hidden bg-bela-plum py-24">
         <AuroraBackground variant="subtle" />
         <div className="relative mx-auto w-full max-w-6xl px-4">
-          <div className="mx-auto max-w-2xl text-center">
+          <div data-reveal className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold text-white sm:text-4xl">Por que escolher o bela360</h2>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div data-reveal-group className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {WHY_US.map((item) => (
-              <div key={item.title} className="glass-dark noise-overlay rounded-2xl p-6 text-center">
+              <div key={item.title} data-reveal-item className="glass-dark noise-overlay rounded-2xl p-6 text-center">
                 <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
                   <item.icon className="h-5 w-5" />
                 </div>
@@ -257,15 +299,15 @@ export default function HomePage() {
       {/* Product preview */}
       <section className="relative bg-background py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
-          <div className="mx-auto max-w-2xl text-center">
+          <div data-reveal className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold sm:text-4xl">Um painel, tudo organizado</h2>
             <p className="mt-4 text-muted-foreground">
               Agenda, financeiro e conversas em um só lugar, com o visual do bela360.
             </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <Card className="overflow-hidden">
+          <div data-preview-group className="mt-16 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <Card data-preview-panel className="overflow-hidden">
               <div className="border-b border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2">
                   <CalendarCheck className="h-4 w-4 text-primary" />
@@ -284,7 +326,7 @@ export default function HomePage() {
               </div>
             </Card>
 
-            <Card className="overflow-hidden">
+            <Card data-preview-panel className="overflow-hidden">
               <div className="border-b border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-primary" />
@@ -307,7 +349,7 @@ export default function HomePage() {
               </div>
             </Card>
 
-            <Card className="overflow-hidden">
+            <Card data-preview-panel className="overflow-hidden">
               <div className="border-b border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4 text-primary" />
@@ -333,16 +375,17 @@ export default function HomePage() {
       {/* Gallery */}
       <section className="relative bg-muted/30 py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
-          <div className="mx-auto max-w-2xl text-center">
+          <div data-reveal className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold sm:text-4xl">Para todo tipo de negócio de beleza</h2>
             <p className="mt-4 text-muted-foreground">
               Salão, barbearia, clínica de estética ou spa: o bela360 se adapta ao seu atendimento.
             </p>
           </div>
-          <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <div data-reveal-group className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-3">
             {GALLERY.map((item) => (
               <div
                 key={item.label}
+                data-reveal-item
                 className="group relative aspect-[3/4] overflow-hidden rounded-2xl shadow-sm"
               >
                 <Image
@@ -366,15 +409,15 @@ export default function HomePage() {
       <section id="como-funciona" className="relative overflow-hidden bg-bela-plum py-24">
         <AuroraBackground variant="subtle" />
         <div className="relative mx-auto w-full max-w-6xl px-4">
-          <div className="mx-auto max-w-2xl text-center">
+          <div data-reveal className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold text-white sm:text-4xl">
               Comece a usar em 3 passos
             </h2>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
+          <div data-reveal-group className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
             {STEPS.map((s) => (
-              <div key={s.step} className="glass-dark noise-overlay rounded-2xl p-6 text-center">
+              <div key={s.step} data-reveal-item className="glass-dark noise-overlay rounded-2xl p-6 text-center">
                 <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-brand text-sm font-bold text-white">
                   {s.step}
                 </div>
@@ -397,13 +440,16 @@ export default function HomePage() {
 
       {/* Trust strip */}
       <section className="border-t border-border bg-background py-16">
-        <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-4 text-center sm:flex-row sm:justify-between sm:text-left">
+        <div
+          data-reveal-group
+          className="mx-auto flex w-full max-w-4xl flex-col items-center gap-6 px-4 text-center sm:flex-row sm:justify-between sm:text-left"
+        >
           {[
             'Atendimento automático 24h por dia',
             'Sem instalar nada, direto do WhatsApp',
             'Seus dados protegidos, sempre',
           ].map((item) => (
-            <div key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div key={item} data-reveal-item className="flex items-center gap-2 text-sm text-muted-foreground">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-bela-violet" />
               {item}
             </div>
@@ -413,7 +459,7 @@ export default function HomePage() {
 
       {/* Final CTA */}
       <section id="contato" className="relative overflow-hidden bg-background py-24">
-        <div className="mx-auto w-full max-w-4xl px-4 text-center">
+        <div data-reveal className="mx-auto w-full max-w-4xl px-4 text-center">
           <h2 className="text-3xl font-bold sm:text-4xl">Pronta para automatizar seu salão?</h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
             Cadastre seu negócio agora e comece a atender pelo WhatsApp ainda hoje.
