@@ -20,6 +20,8 @@ import { loyaltyRoutes } from './modules/loyalty';
 import { inventoryRoutes } from './modules/inventory';
 import { professionalRoutes } from './modules/professional';
 import { platformRoutes, requirePremiumModule } from './modules/platform';
+import { agentesRoutes } from './modules/agentes';
+import { kaiRoutes } from './modules/kai';
 import { PlatformModule } from '@prisma/client';
 import { authMiddleware } from './common/middleware/auth.middleware';
 
@@ -121,6 +123,8 @@ app.use('/api/loyalty', authMiddleware, requirePremiumModule(PlatformModule.LOYA
 app.use('/api/inventory', authMiddleware, requirePremiumModule(PlatformModule.INVENTORY), inventoryRoutes);
 app.use('/api/professional', authMiddleware, professionalRoutes);
 app.use('/api/platform', authMiddleware, platformRoutes);
+app.use('/api/agentes', authMiddleware, agentesRoutes);
+app.use('/api/kai', authMiddleware, kaiRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

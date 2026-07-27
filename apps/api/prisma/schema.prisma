@@ -78,68 +78,108 @@ enum PlatformModule {
   INVENTORY
 }
 
+// Os 6 papeis fixos de agente de reuniao. DIRETOR (Renato) comanda os outros
+// 5; GESTAO_CORPORATIVA (Marina) organiza dados/pauta. Kai (infraestrutura)
+// nao e um papel aqui: ele fica fora desta hierarquia de propósito.
+enum AgentePapel {
+  DIRETOR // Renato
+  GESTAO_CORPORATIVA // Marina
+  FINANCEIRO // Vitor
+  MARKETING // Leo
+  ATENDIMENTO // Ana
+  TI // Theo
+}
+
+enum ReuniaoStatus {
+  AGENDADA
+  EM_ANDAMENTO
+  CONCLUIDA
+}
+
+enum IntegracaoStatus {
+  PLANEJADA
+  EM_TESTE
+  PRONTA_PRODUCAO
+}
+
+enum AprovacaoKaiStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
+enum AmbientePropagacao {
+  SANDBOX
+  PRODUCAO
+}
+
 // ============================================
 // CORE MODELS
 // ============================================
 
 model Business {
-  id          String         @id @default(cuid())
-  name        String
-  slug        String         @unique
-  phone       String         @unique
-  email       String?
-  type        BusinessType   @default(SALON)
-  status      BusinessStatus @default(PENDING)
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  phone         String         @unique
+  email         String?
+  type          BusinessType   @default(SALON)
+  status        BusinessStatus @default(PENDING)
+  isTestAccount Boolean        @default(false) // sandbox/cliente de teste: Kai ativa capacidades novas aqui sem aprovacao
 
   // Address
-  address     String?
-  city        String?
-  state       String?
-  zipCode     String?
+  address String?
+  city    String?
+  state   String?
+  zipCode String?
 
   // WhatsApp Integration
-  whatsappInstanceId   String?   @unique
-  whatsappConnected    Boolean   @default(false)
-  whatsappConnectedAt  DateTime?
+  whatsappInstanceId  String?   @unique
+  whatsappConnected   Boolean   @default(false)
+  whatsappConnectedAt DateTime?
 
   // Settings (JSON)
-  settings    Json           @default("{}")
+  settings Json @default("{}")
 
   // Timestamps
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  users           User[]
-  services        Service[]
-  clients         Client[]
-  appointments    Appointment[]
-  workingHours    WorkingHours[]
-  messages        Message[]
+  users            User[]
+  services         Service[]
+  clients          Client[]
+  appointments     Appointment[]
+  workingHours     WorkingHours[]
+  messages         Message[]
   messageTemplates MessageTemplate[]
 
   // Epic 6-10 relations
-  automations     Automation[]
-  waitlist        Waitlist[]
-  payments        Payment[]
+  automations       Automation[]
+  waitlist          Waitlist[]
+  payments          Payment[]
   commissionConfigs CommissionConfig[]
-  cashRegisters   CashRegister[]
-  campaigns       Campaign[]
-  clientRatings   ClientRating[]
+  cashRegisters     CashRegister[]
+  campaigns         Campaign[]
+  clientRatings     ClientRating[]
 
   // Epic 11-13 relations
-  loyaltyProgram  LoyaltyProgram?
-  loyaltyPoints   LoyaltyPoints[]
-  products        Product[]
-  stockMovements  StockMovement[]
-  professionalGoals ProfessionalGoal[]
+  loyaltyProgram       LoyaltyProgram?
+  loyaltyPoints        LoyaltyPoints[]
+  products             Product[]
+  stockMovements       StockMovement[]
+  professionalGoals    ProfessionalGoal[]
   professionalRankings ProfessionalRanking[]
   marketingSuggestions MarketingSuggestion[]
-  contentTemplates ContentTemplate[]
-  commissionPayouts CommissionPayout[]
+  contentTemplates     ContentTemplate[]
+  commissionPayouts    CommissionPayout[]
 
   // Platform plan
   platformCoupons PlatformCoupon[]
+
+  // Agentes de reuniao e infraestrutura Kai
+  agentes  Agente[]
+  reunioes Reuniao[]
 
   @@index([phone])
   @@index([status])
@@ -147,54 +187,57 @@ model Business {
 }
 
 model User {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   businessId   String
   name         String
   phone        String
   email        String?
-  role         UserRole  @default(PROFESSIONAL)
-  isActive     Boolean   @default(true)
-  isSuperAdmin Boolean   @default(false) // Platform operator (Anderson), independent of per-business role. Grants coupon issuance.
+  role         UserRole @default(PROFESSIONAL)
+  isActive     Boolean  @default(true)
+  isSuperAdmin Boolean  @default(false) // Platform operator (Anderson), independent of per-business role. Grants coupon issuance.
 
   // Authentication
   otpCode      String?
   otpExpiresAt DateTime?
   lastLoginAt  DateTime?
-  passwordHash String?   // Fallback login (scrypt "salt:hash"), independent of WhatsApp OTP delivery
+  passwordHash String? // Fallback login (scrypt "salt:hash"), independent of WhatsApp OTP delivery
 
   // Professional specific
-  color        String?   // Calendar color
-  commission   Decimal?  @db.Decimal(5, 2) // Commission percentage
+  color      String? // Calendar color
+  commission Decimal? @db.Decimal(5, 2) // Commission percentage
 
   // Timestamps
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  appointments Appointment[] @relation("ProfessionalAppointments")
+  business     Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]         @relation("ProfessionalAppointments")
   services     ServiceProfessional[]
   workingHours WorkingHours[]
 
   // Epic 6-10 relations
-  waitlistEntries    Waitlist[]
-  paymentsReceived   Payment[] @relation("ProfessionalPayments")
-  paymentsRegistered Payment[] @relation("RegisteredPayments")
-  commissionConfigs  CommissionConfig[] @relation("ProfessionalCommissionConfigs")
+  waitlistEntries     Waitlist[]
+  paymentsReceived    Payment[]          @relation("ProfessionalPayments")
+  paymentsRegistered  Payment[]          @relation("RegisteredPayments")
+  commissionConfigs   CommissionConfig[] @relation("ProfessionalCommissionConfigs")
   cashRegistersClosed CashRegister[]
-  ratings            ClientRating[] @relation("ProfessionalRatings")
+  ratings             ClientRating[]     @relation("ProfessionalRatings")
 
   // Epic 11-13 relations
-  stockMovements     StockMovement[]
-  professionalProfile ProfessionalProfile?
+  stockMovements       StockMovement[]
+  professionalProfile  ProfessionalProfile?
   professionalRankings ProfessionalRanking[]
 
   // Commission payout relations
-  commissionPayouts  CommissionPayout[] @relation("ProfessionalPayouts")
-  processedPayouts   CommissionPayout[] @relation("ProcessedPayouts")
+  commissionPayouts CommissionPayout[] @relation("ProfessionalPayouts")
+  processedPayouts  CommissionPayout[] @relation("ProcessedPayouts")
 
   // Platform plan coupons issued by this user (only meaningful when isSuperAdmin)
-  couponsIssued      PlatformCoupon[] @relation("CouponIssuedBy")
+  couponsIssued PlatformCoupon[] @relation("CouponIssuedBy")
+
+  // Aprovacoes do Kai decididas por este usuario (only meaningful when isSuperAdmin)
+  aprovacoesKaiDecididas AprovacaoKai[] @relation("AprovacaoKaiDecididaPor")
 
   @@unique([businessId, phone])
   @@index([businessId])
@@ -203,31 +246,31 @@ model User {
 }
 
 model Service {
-  id           String    @id @default(cuid())
-  businessId   String
-  name         String
-  description  String?
-  duration     Int       // Duration in minutes
-  price        Decimal   @db.Decimal(10, 2)
-  isActive     Boolean   @default(true)
+  id          String  @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  duration    Int // Duration in minutes
+  price       Decimal @db.Decimal(10, 2)
+  isActive    Boolean @default(true)
 
   // Timestamps
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business      Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
   professionals ServiceProfessional[]
-  appointments Appointment[]
+  appointments  Appointment[]
 
   // Epic 6-10 relations
-  automations  Automation[]
-  waitlistEntries Waitlist[]
+  automations       Automation[]
+  waitlistEntries   Waitlist[]
   commissionConfigs CommissionConfig[]
 
   // Epic 11-12 relations
-  loyaltyRewards   LoyaltyReward[]
-  serviceProducts  ServiceProduct[]
+  loyaltyRewards  LoyaltyReward[]
+  serviceProducts ServiceProduct[]
 
   @@index([businessId])
   @@index([businessId, isActive])
@@ -235,43 +278,43 @@ model Service {
 }
 
 model ServiceProfessional {
-  id            String   @id @default(cuid())
-  serviceId     String
+  id             String   @id @default(cuid())
+  serviceId      String
   professionalId String
-  customDuration Int?    // Override service duration
+  customDuration Int? // Override service duration
   customPrice    Decimal? @db.Decimal(10, 2) // Override service price
 
   // Relations
-  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  professional User     @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  service      Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  professional User    @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 
   @@unique([serviceId, professionalId])
   @@map("service_professionals")
 }
 
 model Client {
-  id           String    @id @default(cuid())
-  businessId   String
-  name         String
-  phone        String
-  email        String?
-  birthDate    DateTime?
-  notes        String?
+  id         String    @id @default(cuid())
+  businessId String
+  name       String
+  phone      String
+  email      String?
+  birthDate  DateTime?
+  notes      String?
 
   // Preferences
   preferredProfessionalId String?
 
   // Stats (denormalized for performance)
-  totalAppointments Int      @default(0)
-  totalSpent        Decimal  @default(0) @db.Decimal(10, 2)
+  totalAppointments Int       @default(0)
+  totalSpent        Decimal   @default(0) @db.Decimal(10, 2)
   lastVisitAt       DateTime?
 
   // Timestamps
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   messages     Message[]
 
@@ -294,19 +337,19 @@ model Client {
 }
 
 model Appointment {
-  id             String            @id @default(cuid())
+  id             String @id @default(cuid())
   businessId     String
   clientId       String
   professionalId String
   serviceId      String
 
   // Scheduling
-  startTime      DateTime
-  endTime        DateTime
-  status         AppointmentStatus @default(PENDING)
+  startTime DateTime
+  endTime   DateTime
+  status    AppointmentStatus @default(PENDING)
 
   // Notes
-  notes          String?
+  notes              String?
   cancellationReason String?
 
   // Reminders
@@ -314,18 +357,18 @@ model Appointment {
   confirmedAt    DateTime?
 
   // Timestamps
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  client         Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  professional   User              @relation("ProfessionalAppointments", fields: [professionalId], references: [id], onDelete: Cascade)
-  service        Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  professional User     @relation("ProfessionalAppointments", fields: [professionalId], references: [id], onDelete: Cascade)
+  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   // Epic 6-10 relations
-  payments       Payment[]
-  rating         ClientRating?
+  payments Payment[]
+  rating   ClientRating?
 
   @@index([businessId])
   @@index([businessId, startTime])
@@ -338,22 +381,22 @@ model Appointment {
 model WorkingHours {
   id             String    @id @default(cuid())
   businessId     String
-  professionalId String?   // null = business-wide hours
+  professionalId String? // null = business-wide hours
   dayOfWeek      DayOfWeek
 
   // Time slots (stored as HH:MM)
-  startTime      String    // e.g., "09:00"
-  endTime        String    // e.g., "18:00"
+  startTime String // e.g., "09:00"
+  endTime   String // e.g., "18:00"
 
   // Break time
-  breakStart     String?   // e.g., "12:00"
-  breakEnd       String?   // e.g., "13:00"
+  breakStart String? // e.g., "12:00"
+  breakEnd   String? // e.g., "13:00"
 
-  isActive       Boolean   @default(true)
+  isActive Boolean @default(true)
 
   // Relations
-  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  professional   User?     @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  professional User?    @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, professionalId, dayOfWeek])
   @@index([businessId])
@@ -366,38 +409,38 @@ model WorkingHours {
 // ============================================
 
 model Message {
-  id           String           @id @default(cuid())
-  businessId   String
-  clientId     String?
+  id         String  @id @default(cuid())
+  businessId String
+  clientId   String?
 
   // WhatsApp specific
-  whatsappMessageId String?     @unique
-  remoteJid    String           // WhatsApp JID
+  whatsappMessageId String? @unique
+  remoteJid         String // WhatsApp JID
 
   // Content
-  direction    MessageDirection
-  content      String
-  mediaUrl     String?
-  mediaType    String?
+  direction MessageDirection
+  content   String
+  mediaUrl  String?
+  mediaType String?
 
   // Status
-  status       MessageStatus    @default(PENDING)
+  status       MessageStatus @default(PENDING)
   sentAt       DateTime?
   deliveredAt  DateTime?
   readAt       DateTime?
   failedReason String?
 
   // Context
-  isFromBot    Boolean          @default(false)
-  intent       String?          // Detected intent (scheduling, info, etc.)
+  isFromBot Boolean @default(false)
+  intent    String? // Detected intent (scheduling, info, etc.)
 
   // Timestamps
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  client       Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([businessId, createdAt])
@@ -407,19 +450,19 @@ model Message {
 }
 
 model MessageTemplate {
-  id           String    @id @default(cuid())
-  businessId   String
-  name         String
-  type         String    // confirmation, reminder, welcome, etc.
-  content      String    // Template with variables like {{client_name}}
-  isActive     Boolean   @default(true)
+  id         String  @id @default(cuid())
+  businessId String
+  name       String
+  type       String // confirmation, reminder, welcome, etc.
+  content    String // Template with variables like {{client_name}}
+  isActive   Boolean @default(true)
 
   // Timestamps
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, type])
   @@index([businessId])
@@ -431,31 +474,31 @@ model MessageTemplate {
 // ============================================
 
 model DailyStats {
-  id                 String   @id @default(cuid())
-  businessId         String
-  date               DateTime @db.Date
+  id         String   @id @default(cuid())
+  businessId String
+  date       DateTime @db.Date
 
   // Appointment stats
-  totalAppointments  Int      @default(0)
-  confirmedCount     Int      @default(0)
-  cancelledCount     Int      @default(0)
-  noShowCount        Int      @default(0)
-  completedCount     Int      @default(0)
+  totalAppointments Int @default(0)
+  confirmedCount    Int @default(0)
+  cancelledCount    Int @default(0)
+  noShowCount       Int @default(0)
+  completedCount    Int @default(0)
 
   // Revenue
-  totalRevenue       Decimal  @default(0) @db.Decimal(10, 2)
+  totalRevenue Decimal @default(0) @db.Decimal(10, 2)
 
   // Client stats
-  newClients         Int      @default(0)
-  returningClients   Int      @default(0)
+  newClients       Int @default(0)
+  returningClients Int @default(0)
 
   // Message stats
-  messagesSent       Int      @default(0)
-  messagesReceived   Int      @default(0)
+  messagesSent     Int @default(0)
+  messagesReceived Int @default(0)
 
   // Timestamps
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([businessId, date])
   @@index([businessId])
@@ -468,10 +511,10 @@ model DailyStats {
 // ============================================
 
 enum AutomationType {
-  POST_APPOINTMENT   // Mensagem pós-atendimento
-  RETURN_REMINDER    // Lembrete de retorno
-  BIRTHDAY           // Aniversário
-  REACTIVATION       // Reativação de inativos
+  POST_APPOINTMENT // Mensagem pós-atendimento
+  RETURN_REMINDER // Lembrete de retorno
+  BIRTHDAY // Aniversário
+  REACTIVATION // Reativação de inativos
 }
 
 enum AutomationLogStatus {
@@ -482,34 +525,34 @@ enum AutomationLogStatus {
 }
 
 model Automation {
-  id           String         @id @default(cuid())
-  businessId   String
-  type         AutomationType
-  isActive     Boolean        @default(true)
+  id         String         @id @default(cuid())
+  businessId String
+  type       AutomationType
+  isActive   Boolean        @default(true)
 
   // Configuration
-  delayHours   Int?           // Delay após evento (ex: 2h após atendimento)
-  delayDays    Int?           // Delay em dias (ex: 30 dias para retorno)
-  sendTime     String?        // Horário de envio (ex: "09:00")
+  delayHours Int? // Delay após evento (ex: 2h após atendimento)
+  delayDays  Int? // Delay em dias (ex: 30 dias para retorno)
+  sendTime   String? // Horário de envio (ex: "09:00")
 
   // Template
-  template     String         // Mensagem com variáveis {{nome}}, {{servico}}, etc.
+  template String // Mensagem com variáveis {{nome}}, {{servico}}, etc.
 
   // For return reminders - per service configuration
-  serviceId    String?        // Se específico para um serviço
+  serviceId String? // Se específico para um serviço
 
   // Stats
-  totalSent    Int            @default(0)
-  totalConverted Int          @default(0)  // Quantos geraram agendamento
+  totalSent      Int @default(0)
+  totalConverted Int @default(0) // Quantos geraram agendamento
 
   // Timestamps
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  service      Service?       @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  logs         AutomationLog[]
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service  Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  logs     AutomationLog[]
 
   @@unique([businessId, type, serviceId])
   @@index([businessId])
@@ -518,28 +561,28 @@ model Automation {
 }
 
 model AutomationLog {
-  id           String              @id @default(cuid())
-  automationId String
-  clientId     String
-  appointmentId String?            // Relacionado a qual agendamento (se aplicável)
+  id            String  @id @default(cuid())
+  automationId  String
+  clientId      String
+  appointmentId String? // Relacionado a qual agendamento (se aplicável)
 
   // Status
   status       AutomationLogStatus @default(PENDING)
-  scheduledFor DateTime            // Quando deve ser enviado
+  scheduledFor DateTime // Quando deve ser enviado
   sentAt       DateTime?
   failedReason String?
 
   // Tracking
-  convertedToAppointment Boolean   @default(false)
-  convertedAppointmentId String?   // Se gerou novo agendamento
+  convertedToAppointment Boolean @default(false)
+  convertedAppointmentId String? // Se gerou novo agendamento
 
   // Timestamps
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  automation   Automation          @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  client     Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([automationId])
   @@index([clientId])
@@ -560,43 +603,43 @@ enum WaitlistStatus {
 }
 
 enum DayPeriod {
-  MORNING    // 06:00 - 12:00
-  AFTERNOON  // 12:00 - 18:00
-  EVENING    // 18:00 - 22:00
+  MORNING // 06:00 - 12:00
+  AFTERNOON // 12:00 - 18:00
+  EVENING // 18:00 - 22:00
   ANY
 }
 
 model Waitlist {
-  id             String         @id @default(cuid())
+  id             String  @id @default(cuid())
   businessId     String
   clientId       String
   serviceId      String
-  professionalId String?        // null = qualquer profissional
+  professionalId String? // null = qualquer profissional
 
   // Preferences
-  desiredDate    DateTime       @db.Date
-  desiredPeriod  DayPeriod      @default(ANY)
+  desiredDate   DateTime  @db.Date
+  desiredPeriod DayPeriod @default(ANY)
 
   // Status
-  status         WaitlistStatus @default(WAITING)
-  notifiedAt     DateTime?
-  expiresAt      DateTime?      // 30min após notificação
+  status     WaitlistStatus @default(WAITING)
+  notifiedAt DateTime?
+  expiresAt  DateTime? // 30min após notificação
 
   // Conversion tracking
   convertedAppointmentId String?
 
   // Priority (timestamp for FIFO)
-  priority       DateTime       @default(now())
+  priority DateTime @default(now())
 
   // Timestamps
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  client         Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  service        Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  professional   User?          @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  professional User?    @relation(fields: [professionalId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([businessId, desiredDate, status])
@@ -626,45 +669,45 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id             String        @id @default(cuid())
+  id             String @id @default(cuid())
   businessId     String
   appointmentId  String
   clientId       String
   professionalId String
 
   // Values
-  amount         Decimal       @db.Decimal(10, 2)
-  discount       Decimal       @default(0) @db.Decimal(10, 2)
-  finalAmount    Decimal       @db.Decimal(10, 2)
+  amount      Decimal @db.Decimal(10, 2)
+  discount    Decimal @default(0) @db.Decimal(10, 2)
+  finalAmount Decimal @db.Decimal(10, 2)
 
   // Payment info
-  method         PaymentMethod
-  status         PaymentStatus @default(COMPLETED)
+  method PaymentMethod
+  status PaymentStatus @default(COMPLETED)
 
   // Commission
-  commissionRate Decimal       @db.Decimal(5, 2)  // Percentage
-  commissionAmount Decimal     @db.Decimal(10, 2) // Calculated amount
-  businessAmount Decimal       @db.Decimal(10, 2) // What stays with business
-  commissionPayoutId String?   // Links to payout when commission is paid
+  commissionRate     Decimal @db.Decimal(5, 2) // Percentage
+  commissionAmount   Decimal @db.Decimal(10, 2) // Calculated amount
+  businessAmount     Decimal @db.Decimal(10, 2) // What stays with business
+  commissionPayoutId String? // Links to payout when commission is paid
 
   // Receipt
-  receiptUrl     String?       // Photo of receipt if any
-  notes          String?
+  receiptUrl String? // Photo of receipt if any
+  notes      String?
 
   // Who registered
   registeredById String
 
   // Timestamps
-  paidAt         DateTime      @default(now())
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  appointment    Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  professional   User          @relation("ProfessionalPayments", fields: [professionalId], references: [id], onDelete: Cascade)
-  registeredBy   User          @relation("RegisteredPayments", fields: [registeredById], references: [id], onDelete: Cascade)
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment      Appointment       @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  professional     User              @relation("ProfessionalPayments", fields: [professionalId], references: [id], onDelete: Cascade)
+  registeredBy     User              @relation("RegisteredPayments", fields: [registeredById], references: [id], onDelete: Cascade)
   commissionPayout CommissionPayout? @relation("PaymentPayout", fields: [commissionPayoutId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
@@ -676,23 +719,23 @@ model Payment {
 }
 
 model CommissionConfig {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   businessId     String
   professionalId String
-  serviceId      String?  // null = default for all services
+  serviceId      String? // null = default for all services
 
   // Rate
-  rate           Decimal  @db.Decimal(5, 2)  // Percentage (0-100)
-  fixedAmount    Decimal? @db.Decimal(10, 2) // Or fixed amount per service
+  rate        Decimal  @db.Decimal(5, 2) // Percentage (0-100)
+  fixedAmount Decimal? @db.Decimal(10, 2) // Or fixed amount per service
 
   // Timestamps
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  professional   User     @relation("ProfessionalCommissionConfigs", fields: [professionalId], references: [id], onDelete: Cascade)
-  service        Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  professional User     @relation("ProfessionalCommissionConfigs", fields: [professionalId], references: [id], onDelete: Cascade)
+  service      Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, professionalId, serviceId])
   @@index([businessId])
@@ -701,37 +744,37 @@ model CommissionConfig {
 }
 
 model CommissionPayout {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   businessId     String
   professionalId String
 
   // Payout details
-  totalAmount    Decimal  @db.Decimal(10, 2) // Total commission being paid
-  paymentCount   Int      // Number of appointments included
-  periodStart    DateTime // Start of the period covered
-  periodEnd      DateTime // End of the period covered
+  totalAmount  Decimal  @db.Decimal(10, 2) // Total commission being paid
+  paymentCount Int // Number of appointments included
+  periodStart  DateTime // Start of the period covered
+  periodEnd    DateTime // End of the period covered
 
   // Payment info
-  paymentMethod  String?  // How the payout was made (cash, pix, transfer, etc)
-  reference      String?  // Reference/receipt number
-  notes          String?
+  paymentMethod String? // How the payout was made (cash, pix, transfer, etc)
+  reference     String? // Reference/receipt number
+  notes         String?
 
   // Status
-  status         CommissionPayoutStatus @default(PENDING)
-  paidAt         DateTime?              // When actually paid
+  status CommissionPayoutStatus @default(PENDING)
+  paidAt DateTime? // When actually paid
 
   // Who processed
-  processedById  String?
+  processedById String?
 
   // Timestamps
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  professional   User     @relation("ProfessionalPayouts", fields: [professionalId], references: [id], onDelete: Cascade)
-  processedBy    User?    @relation("ProcessedPayouts", fields: [processedById], references: [id], onDelete: SetNull)
-  payments       Payment[] @relation("PaymentPayout")
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  professional User      @relation("ProfessionalPayouts", fields: [professionalId], references: [id], onDelete: Cascade)
+  processedBy  User?     @relation("ProcessedPayouts", fields: [processedById], references: [id], onDelete: SetNull)
+  payments     Payment[] @relation("PaymentPayout")
 
   @@index([businessId])
   @@index([professionalId])
@@ -746,40 +789,40 @@ enum CommissionPayoutStatus {
 }
 
 model CashRegister {
-  id             String   @id @default(cuid())
-  businessId     String
-  date           DateTime @db.Date
+  id         String   @id @default(cuid())
+  businessId String
+  date       DateTime @db.Date
 
   // Totals by payment method
-  cashTotal      Decimal  @default(0) @db.Decimal(10, 2)
-  pixTotal       Decimal  @default(0) @db.Decimal(10, 2)
-  creditTotal    Decimal  @default(0) @db.Decimal(10, 2)
-  debitTotal     Decimal  @default(0) @db.Decimal(10, 2)
-  otherTotal     Decimal  @default(0) @db.Decimal(10, 2)
+  cashTotal   Decimal @default(0) @db.Decimal(10, 2)
+  pixTotal    Decimal @default(0) @db.Decimal(10, 2)
+  creditTotal Decimal @default(0) @db.Decimal(10, 2)
+  debitTotal  Decimal @default(0) @db.Decimal(10, 2)
+  otherTotal  Decimal @default(0) @db.Decimal(10, 2)
 
   // Summary
-  totalRevenue   Decimal  @default(0) @db.Decimal(10, 2)
+  totalRevenue     Decimal @default(0) @db.Decimal(10, 2)
   totalCommissions Decimal @default(0) @db.Decimal(10, 2)
-  businessProfit Decimal  @default(0) @db.Decimal(10, 2)
+  businessProfit   Decimal @default(0) @db.Decimal(10, 2)
 
   // Counts
-  appointmentCount Int    @default(0)
+  appointmentCount Int @default(0)
 
   // Status
-  isClosed       Boolean  @default(false)
-  closedAt       DateTime?
-  closedById     String?
+  isClosed   Boolean   @default(false)
+  closedAt   DateTime?
+  closedById String?
 
   // Notes
-  notes          String?
+  notes String?
 
   // Timestamps
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  closedBy       User?    @relation(fields: [closedById], references: [id], onDelete: SetNull)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  closedBy User?    @relation(fields: [closedById], references: [id], onDelete: SetNull)
 
   @@unique([businessId, date])
   @@index([businessId])
@@ -792,14 +835,14 @@ model CashRegister {
 // ============================================
 
 enum ClientSegmentType {
-  ALL            // All active clients
-  VIP            // Top 10% by spending
-  NEW            // First visit in last 30 days
-  LOYAL          // 5+ visits
-  INACTIVE       // No visit in 60+ days
-  RECURRING      // 2-4 visits in 3 months
+  ALL // All active clients
+  VIP // Top 10% by spending
+  NEW // First visit in last 30 days
+  LOYAL // 5+ visits
+  INACTIVE // No visit in 60+ days
+  RECURRING // 2-4 visits in 3 months
   BIRTHDAY_MONTH // Clients with birthday this month
-  CUSTOM         // Custom segment
+  CUSTOM // Custom segment
 }
 
 enum CampaignStatus {
@@ -811,37 +854,37 @@ enum CampaignStatus {
 }
 
 model Campaign {
-  id             String         @id @default(cuid())
-  businessId     String
-  name           String
+  id         String @id @default(cuid())
+  businessId String
+  name       String
 
   // Target
-  segmentType    ClientSegmentType?
-  customFilter   Json?          // Custom filter criteria
+  segmentType  ClientSegmentType?
+  customFilter Json? // Custom filter criteria
 
   // Content
-  message        String
+  message String
 
   // Scheduling
-  status         CampaignStatus @default(DRAFT)
-  scheduledFor   DateTime?
-  startedAt      DateTime?
-  completedAt    DateTime?
+  status       CampaignStatus @default(DRAFT)
+  scheduledFor DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
 
   // Stats
-  totalRecipients Int           @default(0)
-  sentCount      Int            @default(0)
-  failedCount    Int            @default(0)
-  respondedCount Int            @default(0)
-  convertedCount Int            @default(0)  // Generated appointments
+  totalRecipients Int @default(0)
+  sentCount       Int @default(0)
+  failedCount     Int @default(0)
+  respondedCount  Int @default(0)
+  convertedCount  Int @default(0) // Generated appointments
 
   // Timestamps
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  recipients     CampaignRecipient[]
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  recipients CampaignRecipient[]
 
   @@index([businessId])
   @@index([businessId, status])
@@ -849,28 +892,28 @@ model Campaign {
 }
 
 model CampaignRecipient {
-  id             String   @id @default(cuid())
-  campaignId     String
-  clientId       String
+  id         String @id @default(cuid())
+  campaignId String
+  clientId   String
 
   // Status
-  sentAt         DateTime?
-  deliveredAt    DateTime?
-  readAt         DateTime?
-  respondedAt    DateTime?
-  failed         Boolean  @default(false)
-  failedReason   String?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  respondedAt  DateTime?
+  failed       Boolean   @default(false)
+  failedReason String?
 
   // Conversion
   convertedToAppointment Boolean @default(false)
-  appointmentId  String?
+  appointmentId          String?
 
   // Timestamps
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, clientId])
   @@index([campaignId])
@@ -883,28 +926,28 @@ model CampaignRecipient {
 // ============================================
 
 model ClientRating {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   businessId     String
   clientId       String
-  appointmentId  String   @unique
+  appointmentId  String @unique
   professionalId String
 
   // Rating
-  rating         Int      // 1-5 stars
-  comment        String?
+  rating  Int // 1-5 stars
+  comment String?
 
   // Professional response
-  response       String?
-  respondedAt    DateTime?
+  response    String?
+  respondedAt DateTime?
 
   // Timestamps
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  business       Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  client         Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  professional   User        @relation("ProfessionalRatings", fields: [professionalId], references: [id], onDelete: Cascade)
+  business     Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client       Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  appointment  Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  professional User        @relation("ProfessionalRatings", fields: [professionalId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([professionalId])
@@ -940,19 +983,19 @@ enum PointsTransactionType {
 }
 
 model LoyaltyProgram {
-  id             String   @id @default(cuid())
-  businessId     String   @unique
+  id         String @id @default(cuid())
+  businessId String @unique
 
   // Configuration
-  isActive       Boolean  @default(true)
-  pointsPerReal  Decimal  @default(1) @db.Decimal(5, 2) // Points earned per R$1
-  useCashback    Boolean  @default(false)
+  isActive        Boolean @default(true)
+  pointsPerReal   Decimal @default(1) @db.Decimal(5, 2) // Points earned per R$1
+  useCashback     Boolean @default(false)
   cashbackPercent Decimal @default(5) @db.Decimal(5, 2)
 
   // Tier thresholds
-  silverThreshold Int     @default(100)
-  goldThreshold   Int     @default(500)
-  diamondThreshold Int    @default(1000)
+  silverThreshold  Int @default(100)
+  goldThreshold    Int @default(500)
+  diamondThreshold Int @default(1000)
 
   // Tier benefits (discount %)
   bronzeDiscount  Decimal @default(0) @db.Decimal(5, 2)
@@ -964,67 +1007,67 @@ model LoyaltyProgram {
   pointsExpirationMonths Int @default(12)
 
   // Timestamps
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  rewards        LoyaltyReward[]
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  rewards  LoyaltyReward[]
 
   @@map("loyalty_programs")
 }
 
 model LoyaltyPoints {
-  id             String   @id @default(cuid())
-  businessId     String
-  clientId       String   @unique
+  id         String @id @default(cuid())
+  businessId String
+  clientId   String @unique
 
   // Balance
-  currentPoints  Int      @default(0)
-  totalEarned    Int      @default(0)
-  totalRedeemed  Int      @default(0)
-  totalExpired   Int      @default(0)
+  currentPoints Int @default(0)
+  totalEarned   Int @default(0)
+  totalRedeemed Int @default(0)
+  totalExpired  Int @default(0)
 
   // Cashback balance (if using cashback mode)
   cashbackBalance Decimal @default(0) @db.Decimal(10, 2)
 
   // Tier
-  currentTier    LoyaltyTier @default(BRONZE)
+  currentTier LoyaltyTier @default(BRONZE)
 
   // Timestamps
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  transactions   LoyaltyTransaction[]
-  redemptions    LoyaltyRedemption[]
+  business     Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client       Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  transactions LoyaltyTransaction[]
+  redemptions  LoyaltyRedemption[]
 
   @@index([businessId])
   @@map("loyalty_points")
 }
 
 model LoyaltyTransaction {
-  id              String   @id @default(cuid())
+  id              String                @id @default(cuid())
   loyaltyPointsId String
   type            PointsTransactionType
-  points          Int      // Positive for earned, negative for redeemed
-  balance         Int      // Balance after transaction
+  points          Int // Positive for earned, negative for redeemed
+  balance         Int // Balance after transaction
 
   // Reference
-  appointmentId   String?
-  redemptionId    String?
-  description     String?
+  appointmentId String?
+  redemptionId  String?
+  description   String?
 
   // Expiration (for earned points)
-  expiresAt       DateTime?
+  expiresAt DateTime?
 
   // Timestamps
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  loyaltyPoints   LoyaltyPoints @relation(fields: [loyaltyPointsId], references: [id], onDelete: Cascade)
+  loyaltyPoints LoyaltyPoints @relation(fields: [loyaltyPointsId], references: [id], onDelete: Cascade)
 
   @@index([loyaltyPointsId])
   @@index([expiresAt])
@@ -1032,68 +1075,68 @@ model LoyaltyTransaction {
 }
 
 model LoyaltyReward {
-  id              String   @id @default(cuid())
-  programId       String
-  name            String
-  description     String?
+  id          String  @id @default(cuid())
+  programId   String
+  name        String
+  description String?
 
   // Cost
-  pointsCost      Int
+  pointsCost Int
 
   // Reward details
   type            RewardType
-  discountPercent Decimal? @db.Decimal(5, 2)
-  discountAmount  Decimal? @db.Decimal(10, 2)
-  serviceId       String?  // For free service
-  productId       String?  // For free product
+  discountPercent Decimal?   @db.Decimal(5, 2)
+  discountAmount  Decimal?   @db.Decimal(10, 2)
+  serviceId       String? // For free service
+  productId       String? // For free product
 
   // Limits
-  isActive        Boolean  @default(true)
-  validityDays    Int      @default(30)  // Coupon validity after redemption
-  maxRedemptions  Int?     // null = unlimited
+  isActive       Boolean @default(true)
+  validityDays   Int     @default(30) // Coupon validity after redemption
+  maxRedemptions Int? // null = unlimited
 
   // Stats
-  totalRedemptions Int     @default(0)
+  totalRedemptions Int @default(0)
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  program         LoyaltyProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
-  service         Service?       @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  product         Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
-  redemptions     LoyaltyRedemption[]
+  program     LoyaltyProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  service     Service?            @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  product     Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  redemptions LoyaltyRedemption[]
 
   @@index([programId])
   @@map("loyalty_rewards")
 }
 
 model LoyaltyRedemption {
-  id              String   @id @default(cuid())
+  id              String @id @default(cuid())
   loyaltyPointsId String
   rewardId        String
   clientId        String
 
   // Coupon
-  couponCode      String   @unique
-  pointsUsed      Int
+  couponCode String @unique
+  pointsUsed Int
 
   // Status
-  isUsed          Boolean  @default(false)
-  usedAt          DateTime?
+  isUsed            Boolean   @default(false)
+  usedAt            DateTime?
   usedAppointmentId String?
 
   // Validity
-  expiresAt       DateTime
+  expiresAt DateTime
 
   // Timestamps
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  loyaltyPoints   LoyaltyPoints @relation(fields: [loyaltyPointsId], references: [id], onDelete: Cascade)
-  reward          LoyaltyReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
-  client          Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  loyaltyPoints LoyaltyPoints @relation(fields: [loyaltyPointsId], references: [id], onDelete: Cascade)
+  reward        LoyaltyReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([loyaltyPointsId])
   @@index([clientId])
@@ -1106,56 +1149,56 @@ model LoyaltyRedemption {
 // ============================================
 
 enum ProductCategory {
-  RESALE        // Para revenda
-  INTERNAL_USE  // Uso interno apenas
-  BOTH          // Ambos
+  RESALE // Para revenda
+  INTERNAL_USE // Uso interno apenas
+  BOTH // Ambos
 }
 
 enum StockMovementType {
-  PURCHASE      // Compra
-  SALE          // Venda
-  SERVICE_USE   // Uso em serviço
-  ADJUSTMENT    // Ajuste manual
-  RETURN        // Devolução
-  LOSS          // Perda
-  EXPIRED       // Vencimento
+  PURCHASE // Compra
+  SALE // Venda
+  SERVICE_USE // Uso em serviço
+  ADJUSTMENT // Ajuste manual
+  RETURN // Devolução
+  LOSS // Perda
+  EXPIRED // Vencimento
 }
 
 model Product {
-  id             String          @id @default(cuid())
-  businessId     String
-  name           String
-  brand          String?
-  description    String?
-  sku            String?
-  barcode        String?
+  id          String  @id @default(cuid())
+  businessId  String
+  name        String
+  brand       String?
+  description String?
+  sku         String?
+  barcode     String?
 
   // Category
-  category       ProductCategory @default(INTERNAL_USE)
+  category ProductCategory @default(INTERNAL_USE)
 
   // Pricing
-  costPrice      Decimal         @db.Decimal(10, 2)
-  salePrice      Decimal?        @db.Decimal(10, 2)  // For resale
+  costPrice Decimal  @db.Decimal(10, 2)
+  salePrice Decimal? @db.Decimal(10, 2) // For resale
 
   // Stock
-  currentStock   Decimal         @default(0) @db.Decimal(10, 3)
-  minStock       Decimal         @default(0) @db.Decimal(10, 3)
-  unit           String          @default("un") // un, ml, g, etc.
+  currentStock Decimal @default(0) @db.Decimal(10, 3)
+  minStock     Decimal @default(0) @db.Decimal(10, 3)
+  unit         String  @default("un") // un, ml, g, etc.
 
   // Expiration
   expirationDate DateTime?
 
   // Status
-  isActive       Boolean         @default(true)
-  imageUrl       String?
+  isActive Boolean @default(true)
+  imageUrl String?
 
   // Timestamps
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  movements      StockMovement[]
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  movements       StockMovement[]
   serviceProducts ServiceProduct[]
   loyaltyRewards  LoyaltyReward[]
 
@@ -1166,32 +1209,32 @@ model Product {
 }
 
 model StockMovement {
-  id             String            @id @default(cuid())
-  businessId     String
-  productId      String
-  type           StockMovementType
+  id         String            @id @default(cuid())
+  businessId String
+  productId  String
+  type       StockMovementType
 
   // Quantity (positive for in, negative for out)
-  quantity       Decimal           @db.Decimal(10, 3)
-  previousStock  Decimal           @db.Decimal(10, 3)
-  newStock       Decimal           @db.Decimal(10, 3)
+  quantity      Decimal @db.Decimal(10, 3)
+  previousStock Decimal @db.Decimal(10, 3)
+  newStock      Decimal @db.Decimal(10, 3)
 
   // Cost tracking
-  unitCost       Decimal?          @db.Decimal(10, 2)
-  totalCost      Decimal?          @db.Decimal(10, 2)
+  unitCost  Decimal? @db.Decimal(10, 2)
+  totalCost Decimal? @db.Decimal(10, 2)
 
   // Reference
-  appointmentId  String?           // If used in service
-  userId         String?           // Who made the movement
-  notes          String?
+  appointmentId String? // If used in service
+  userId        String? // Who made the movement
+  notes         String?
 
   // Timestamps
-  createdAt      DateTime          @default(now())
+  createdAt DateTime @default(now())
 
   // Relations
-  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([productId])
@@ -1200,16 +1243,16 @@ model StockMovement {
 }
 
 model ServiceProduct {
-  id             String   @id @default(cuid())
-  serviceId      String
-  productId      String
+  id        String @id @default(cuid())
+  serviceId String
+  productId String
 
   // Usage per service
-  quantityUsed   Decimal  @db.Decimal(10, 3)
+  quantityUsed Decimal @db.Decimal(10, 3)
 
   // Relations
-  service        Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([serviceId, productId])
   @@map("service_products")
@@ -1220,97 +1263,97 @@ model ServiceProduct {
 // ============================================
 
 enum GoalType {
-  REVENUE         // Faturamento
-  APPOINTMENTS    // Número de atendimentos
-  NEW_CLIENTS     // Novos clientes
-  RATING          // Avaliação média
-  RETURN_RATE     // Taxa de retorno
+  REVENUE // Faturamento
+  APPOINTMENTS // Número de atendimentos
+  NEW_CLIENTS // Novos clientes
+  RATING // Avaliação média
+  RETURN_RATE // Taxa de retorno
 }
 
 enum BadgeType {
-  MILESTONE       // 100 atendimentos, etc.
-  RATING          // 5 estrelas
-  STREAK          // Metas consecutivas
-  SPECIAL         // Tempo de casa, etc.
+  MILESTONE // 100 atendimentos, etc.
+  RATING // 5 estrelas
+  STREAK // Metas consecutivas
+  SPECIAL // Tempo de casa, etc.
 }
 
 model ProfessionalProfile {
-  id              String   @id @default(cuid())
-  userId          String   @unique
+  id     String @id @default(cuid())
+  userId String @unique
 
   // Public profile
-  slug            String   @unique // URL: /p/slug
-  bio             String?
-  specialties     String[] // Array of specialties
-  photoUrl        String?
-  coverPhotoUrl   String?
+  slug          String   @unique // URL: /p/slug
+  bio           String?
+  specialties   String[] // Array of specialties
+  photoUrl      String?
+  coverPhotoUrl String?
 
   // Social links
-  instagramUrl    String?
-  facebookUrl     String?
-  tiktokUrl       String?
+  instagramUrl String?
+  facebookUrl  String?
+  tiktokUrl    String?
 
   // Gallery
   portfolioImages String[] // Array of image URLs
 
   // Stats (denormalized)
   totalAppointments Int     @default(0)
-  totalClients    Int       @default(0)
-  averageRating   Decimal   @default(0) @db.Decimal(3, 2)
-  totalRatings    Int       @default(0)
+  totalClients      Int     @default(0)
+  averageRating     Decimal @default(0) @db.Decimal(3, 2)
+  totalRatings      Int     @default(0)
 
   // Marketing
-  qrCodeUrl       String?
-  referralCode    String?   @unique
-  referralBonus   Decimal   @default(0) @db.Decimal(10, 2)  // Bonus for referred clients
+  qrCodeUrl     String?
+  referralCode  String? @unique
+  referralBonus Decimal @default(0) @db.Decimal(10, 2) // Bonus for referred clients
 
   // Stats tracking
-  clientsReferred Int       @default(0)
+  clientsReferred Int @default(0)
 
   // Visibility
-  isPublic        Boolean   @default(true)
+  isPublic Boolean @default(true)
 
   // Timestamps
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goals           ProfessionalGoal[]
-  badges          ProfessionalBadge[]
+  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals  ProfessionalGoal[]
+  badges ProfessionalBadge[]
 
   @@map("professional_profiles")
 }
 
 model ProfessionalGoal {
-  id              String   @id @default(cuid())
-  profileId       String
-  businessId      String
+  id         String @id @default(cuid())
+  profileId  String
+  businessId String
 
   // Goal definition
-  type            GoalType
-  targetValue     Decimal  @db.Decimal(10, 2)
-  currentValue    Decimal  @default(0) @db.Decimal(10, 2)
+  type         GoalType
+  targetValue  Decimal  @db.Decimal(10, 2)
+  currentValue Decimal  @default(0) @db.Decimal(10, 2)
 
   // Period
-  month           Int      // 1-12
-  year            Int
+  month Int // 1-12
+  year  Int
 
   // Status
-  isAchieved      Boolean  @default(false)
-  achievedAt      DateTime?
+  isAchieved Boolean   @default(false)
+  achievedAt DateTime?
 
   // Bonus
-  bonusAmount     Decimal? @db.Decimal(10, 2)
-  bonusPaid       Boolean  @default(false)
+  bonusAmount Decimal? @db.Decimal(10, 2)
+  bonusPaid   Boolean  @default(false)
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  profile         ProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  profile  ProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  business Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, type, month, year])
   @@index([profileId])
@@ -1319,53 +1362,53 @@ model ProfessionalGoal {
 }
 
 model ProfessionalBadge {
-  id              String   @id @default(cuid())
-  profileId       String
-  type            BadgeType
-  name            String
-  description     String?
-  iconUrl         String?
+  id          String    @id @default(cuid())
+  profileId   String
+  type        BadgeType
+  name        String
+  description String?
+  iconUrl     String?
 
   // Achievement details
-  requirement     String?  // e.g., "100 atendimentos"
-  achievedValue   String?  // e.g., "100"
+  requirement   String? // e.g., "100 atendimentos"
+  achievedValue String? // e.g., "100"
 
   // Timestamps
-  earnedAt        DateTime @default(now())
+  earnedAt DateTime @default(now())
 
   // Relations
-  profile         ProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile ProfessionalProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
   @@map("professional_badges")
 }
 
 model ProfessionalRanking {
-  id              String   @id @default(cuid())
-  businessId      String
-  userId          String
+  id         String @id @default(cuid())
+  businessId String
+  userId     String
 
   // Period
-  month           Int
-  year            Int
+  month Int
+  year  Int
 
   // Metrics
-  revenue         Decimal  @default(0) @db.Decimal(10, 2)
-  appointments    Int      @default(0)
-  newClients      Int      @default(0)
-  averageRating   Decimal  @default(0) @db.Decimal(3, 2)
-  returnRate      Decimal  @default(0) @db.Decimal(5, 2)
+  revenue       Decimal @default(0) @db.Decimal(10, 2)
+  appointments  Int     @default(0)
+  newClients    Int     @default(0)
+  averageRating Decimal @default(0) @db.Decimal(3, 2)
+  returnRate    Decimal @default(0) @db.Decimal(5, 2)
 
   // Ranking position
-  position        Int?
+  position Int?
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, userId, month, year])
   @@index([businessId, month, year])
@@ -1377,29 +1420,29 @@ model ProfessionalRanking {
 // ============================================
 
 model MarketingSuggestion {
-  id              String   @id @default(cuid())
-  businessId      String
+  id         String @id @default(cuid())
+  businessId String
 
   // Suggestion
-  type            String   // EMPTY_SLOT, LOW_DEMAND_SERVICE, INACTIVE_SEGMENT, etc.
+  type            String // EMPTY_SLOT, LOW_DEMAND_SERVICE, INACTIVE_SEGMENT, etc.
   title           String
   description     String
   suggestedAction String?
 
   // Data
-  metadata        Json?    // Additional data for the suggestion
+  metadata Json? // Additional data for the suggestion
 
   // Status
-  isRead          Boolean  @default(false)
-  isActioned      Boolean  @default(false)
-  dismissedAt     DateTime?
+  isRead      Boolean   @default(false)
+  isActioned  Boolean   @default(false)
+  dismissedAt DateTime?
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  expiresAt       DateTime?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
 
   // Relations
-  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([businessId, isRead])
@@ -1407,28 +1450,28 @@ model MarketingSuggestion {
 }
 
 model ContentTemplate {
-  id              String   @id @default(cuid())
-  businessId      String?  // null = global template
+  id         String  @id @default(cuid())
+  businessId String? // null = global template
 
   // Template info
-  name            String
-  category        String   // STORY, POST, WHATSAPP, PROMO
-  occasion        String?  // CHRISTMAS, VALENTINES, BIRTHDAY, etc.
+  name     String
+  category String // STORY, POST, WHATSAPP, PROMO
+  occasion String? // CHRISTMAS, VALENTINES, BIRTHDAY, etc.
 
   // Content
-  content         String
-  imageUrl        String?
-  variables       String[] // Variables like {{business_name}}, {{promo_percent}}
+  content   String
+  imageUrl  String?
+  variables String[] // Variables like {{business_name}}, {{promo_percent}}
 
   // Status
-  isActive        Boolean  @default(true)
+  isActive Boolean @default(true)
 
   // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  business        Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([category])
@@ -1440,28 +1483,186 @@ model ContentTemplate {
 // ============================================
 
 model PlatformCoupon {
-  id          String    @id @default(cuid())
-  code        String    @unique
+  id   String @id @default(cuid())
+  code String @unique
 
-  modules     PlatformModule[] // which gated modules this coupon unlocks
-  durationDays Int              // validity length after redemption
+  modules      PlatformModule[] // which gated modules this coupon unlocks
+  durationDays Int // validity length after redemption
 
   // Optional targeting: if set, only this business can redeem the coupon
   targetBusinessId String?
 
   // Redemption
-  businessId  String?   // set once redeemed
-  redeemedAt  DateTime?
-  expiresAt   DateTime? // computed at redemption time (redeemedAt + durationDays)
+  businessId String? // set once redeemed
+  redeemedAt DateTime?
+  expiresAt  DateTime? // computed at redemption time (redeemedAt + durationDays)
 
   createdById String
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   // Relations
-  business    Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
-  createdBy   User      @relation("CouponIssuedBy", fields: [createdById], references: [id])
+  business  Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  createdBy User      @relation("CouponIssuedBy", fields: [createdById], references: [id])
 
   @@index([businessId])
   @@index([code])
   @@map("platform_coupons")
+}
+
+// ============================================
+// AGENTES DE REUNIAO E HIERARQUIA
+// ============================================
+
+// Uma linha por (business, papel): cada negocio tem sua propria instancia
+// dos 6 agentes. capacidadesAtivas e o que o agente pode EXECUTAR de
+// verdade agora; capacidadesPlanejadas e so pra ele MENCIONAR como roadmap,
+// nunca pra executar (ver modules/agentes/agentes.service.ts, buildSystemPrompt).
+model Agente {
+  id         String      @id @default(cuid())
+  businessId String
+  papel      AgentePapel
+  nome       String // "Renato", "Marina", "Vitor", "Leo", "Ana", "Theo"
+  isActive   Boolean     @default(true) // se false, este negocio nao usa este agente (Kai nao propaga capacidade pra ele)
+
+  // Hierarquia: Renato (DIRETOR) comanda os outros 5; os outros reportam a ele.
+  // Self-relation dentro do mesmo business.
+  reportsToId  String?
+  reportsTo    Agente?  @relation("AgenteHierarquia", fields: [reportsToId], references: [id], onDelete: SetNull)
+  subordinados Agente[] @relation("AgenteHierarquia")
+
+  // Capacidades (preenchidas pelo Kai, nunca editadas manualmente pelo agente)
+  capacidadesAtivas     String[] @default([])
+  capacidadesPlanejadas String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  mensagens         Mensagem[]
+  logsPropagacaoKai LogPropagacaoKai[]
+
+  @@unique([businessId, papel])
+  @@index([businessId])
+  @@map("agentes")
+}
+
+model Reuniao {
+  id          String        @id @default(cuid())
+  businessId  String
+  titulo      String        @default("Reuniao")
+  status      ReuniaoStatus @default(AGENDADA)
+  iniciadaEm  DateTime?
+  encerradaEm DateTime?
+  createdAt   DateTime      @default(now())
+
+  // Relations
+  business  Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  mensagens Mensagem[]
+  ata       Ata?
+
+  @@index([businessId])
+  @@map("reunioes")
+}
+
+model Mensagem {
+  id        String   @id @default(cuid())
+  reuniaoId String
+  agenteId  String? // null quando quem fala e um humano (o Anderson), nao um agente
+  autorNome String // nome de exibicao (nome do agente ou do humano)
+  conteudo  String
+  createdAt DateTime @default(now())
+
+  // Relations
+  reuniao Reuniao @relation(fields: [reuniaoId], references: [id], onDelete: Cascade)
+  agente  Agente? @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+
+  @@index([reuniaoId])
+  @@map("mensagens")
+}
+
+model Ata {
+  id        String   @id @default(cuid())
+  reuniaoId String   @unique
+  resumo    String
+  decisoes  String[] @default([])
+  createdAt DateTime @default(now())
+
+  // Relations
+  reuniao Reuniao @relation(fields: [reuniaoId], references: [id], onDelete: Cascade)
+
+  @@map("atas")
+}
+
+// ============================================
+// INFRAESTRUTURA KAI (Parte 3)
+// ============================================
+//
+// Kai nao participa de reunioes e fica fora da hierarquia dos 6 agentes
+// acima: ele e infraestrutura, nao um "colega de reuniao". Ele conecta
+// plataformas prontas do ecossistema WayIA (ex: criar.wayia.com.br) a um
+// dos 6 papeis de agente.
+//
+// Integracao e AprovacaoKai miram um AgentePapel (papel), nao uma linha
+// especifica de Agente: quando aprovado em producao, TODOS os negocios que
+// tem aquele papel ativo ganham a capacidade de uma vez, sem ativacao
+// manual por cliente (ver modules/kai/kai.service.ts).
+
+model Integracao {
+  id                String           @id @default(cuid())
+  nome              String           @unique // ex: "criacao_video_heygen"
+  dominioPlataforma String // ex: "criar.wayia.com.br"
+  descricao         String?
+  status            IntegracaoStatus @default(PLANEJADA)
+  agentePapelAlvo   AgentePapel // qual dos 6 papeis recebe a capacidade
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  aprovacoes AprovacaoKai[]
+  logs       LogPropagacaoKai[]
+
+  @@index([status])
+  @@index([agentePapelAlvo])
+  @@map("integracoes")
+}
+
+model AprovacaoKai {
+  id              String             @id @default(cuid())
+  integracaoId    String
+  agentePapelAlvo AgentePapel // copia do papel no momento do pedido
+  status          AprovacaoKaiStatus @default(PENDENTE)
+
+  solicitadoEm   DateTime  @default(now())
+  decididoEm     DateTime?
+  decididoPorId  String?
+  motivoRejeicao String?
+
+  // Relations
+  integracao  Integracao         @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  decididoPor User?              @relation("AprovacaoKaiDecididaPor", fields: [decididoPorId], references: [id])
+  logs        LogPropagacaoKai[]
+
+  @@index([integracaoId])
+  @@index([status])
+  @@map("aprovacoes_kai")
+}
+
+model LogPropagacaoKai {
+  id           String             @id @default(cuid())
+  integracaoId String
+  agenteId     String // instancia especifica (business + papel) que recebeu a capacidade
+  ambiente     AmbientePropagacao // SANDBOX ou PRODUCAO
+  aprovacaoId  String? // preenchido quando ambiente = PRODUCAO
+  createdAt    DateTime           @default(now())
+
+  // Relations
+  integracao Integracao    @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  agente     Agente        @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+  aprovacao  AprovacaoKai? @relation(fields: [aprovacaoId], references: [id])
+
+  @@index([integracaoId])
+  @@index([agenteId])
+  @@map("log_propagacao_kai")
 }

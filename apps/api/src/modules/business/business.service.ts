@@ -1,6 +1,7 @@
 import { prisma, logger } from '../../config';
 import { BusinessType, UserRole, DayOfWeek } from '@prisma/client';
 import { AppError } from '../../common/errors';
+import { agentesService } from '../agentes';
 
 interface CreateBusinessDTO {
   name: string;
@@ -134,6 +135,9 @@ export class BusinessService {
         isActive: true,
       })),
     });
+
+    // Create the 6 fixed meeting agents (Renato, Marina, Vitor, Leo, Ana, Theo)
+    await agentesService.ensureAgentesForBusiness(business.id);
 
     // Create default message templates
     await prisma.messageTemplate.createMany({
