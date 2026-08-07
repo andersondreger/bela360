@@ -3,7 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Plus, Save, MessageCircle, CheckCircle2, Sparkles } from 'lucide-react';
 import { PageHeader, Button, Input, Badge } from '@/components/ui';
-import { businessApi, platformApi, PREMIUM_MODULE_LABELS, type BusinessBranding, type PremiumModule } from '@/lib/api';
+import {
+  businessApi,
+  platformApi,
+  PREMIUM_MODULE_LABELS,
+  type Business,
+  type BusinessBranding,
+  type PremiumModule,
+} from '@/lib/api';
 
 export default function ConfiguracoesPage() {
   const [activeTab, setActiveTab] = useState<'negocio' | 'marca' | 'plano' | 'horarios' | 'profissionais' | 'whatsapp'>('negocio');
@@ -40,23 +47,7 @@ export default function ConfiguracoesPage() {
 
       {/* Content */}
       <div className="rounded-2xl border border-border bg-card p-6">
-        {activeTab === 'negocio' && (
-          <form className="space-y-6 max-w-2xl">
-            <Input label="Nome do estabelecimento" type="text" defaultValue="Salao Exemplo" />
-            <Input label="Telefone" type="tel" defaultValue="(11) 99999-9999" />
-            <Input label="Email" type="email" defaultValue="contato@salao.com" />
-            <Input label="Endereco" type="text" defaultValue="Rua Exemplo, 123 - Centro" />
-            <div className="grid grid-cols-3 gap-4">
-              <Input label="Cidade" type="text" defaultValue="Sao Paulo" />
-              <Input label="Estado" type="text" defaultValue="SP" />
-              <Input label="CEP" type="text" defaultValue="01234-567" />
-            </div>
-            <Button type="submit" variant="primary">
-              <Save className="w-4 h-4" />
-              Salvar alteracoes
-            </Button>
-          </form>
-        )}
+        {activeTab === 'negocio' && <NegocioTab />}
 
         {activeTab === 'marca' && <MarcaTab />}
 
@@ -219,6 +210,111 @@ export default function ConfiguracoesPage() {
         )}
       </div>
     </div>
+  );
+}
+
+interface NegocioForm {
+  name: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+}
+
+const EMPTY_NEGOCIO_FORM: NegocioForm = { name: '', email: '', address: '', city: '', state: '', zipCode: '' };
+
+function NegocioTab() {
+  const [form, setForm] = useState<NegocioForm>(EMPTY_NEGOCIO_FORM);
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    businessApi
+      .getCurrent()
+      .then((business) => {
+        setForm({
+          name: business.name || '',
+          email: business.email || '',
+          address: business.address || '',
+          city: business.city || '',
+          state: business.state || '',
+          zipCode: business.zipCode || '',
+        });
+        setPhone(business.phone || '');
+      })
+      .catch(() => setError('Não foi possível carregar os dados do negócio.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const update = (field: keyof NegocioForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = field === 'state' ? e.target.value.toUpperCase().slice(0, 2) : e.target.value;
+    setForm((f) => ({ ...f, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    setSaved(false);
+    try {
+      const business = await businessApi.updateInfo({
+        name: form.name?.trim() || undefined,
+        email: form.email?.trim() || undefined,
+        address: form.address?.trim() || undefined,
+        city: form.city?.trim() || undefined,
+        state: form.state?.trim() || undefined,
+        zipCode: form.zipCode?.trim() || undefined,
+      });
+      setForm({
+        name: business.name || '',
+        email: business.email || '',
+        address: business.address || '',
+        city: business.city || '',
+        state: business.state || '',
+        zipCode: business.zipCode || '',
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar as alterações.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-muted-foreground">Carregando...</p>;
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+      <Input label="Nome do estabelecimento" type="text" required minLength={2} value={form.name} onChange={update('name')} />
+      <Input
+        label="Telefone"
+        type="tel"
+        value={phone}
+        disabled
+        title="O telefone é o login da conta e não pode ser alterado por aqui."
+      />
+      <Input label="Email" type="email" value={form.email} onChange={update('email')} placeholder="contato@salao.com" />
+      <Input label="Endereço" type="text" value={form.address} onChange={update('address')} placeholder="Rua Exemplo, 123 - Centro" />
+      <div className="grid grid-cols-3 gap-4">
+        <Input label="Cidade" type="text" value={form.city} onChange={update('city')} />
+        <Input label="Estado" type="text" value={form.state} onChange={update('state')} maxLength={2} placeholder="SP" />
+        <Input label="CEP" type="text" value={form.zipCode} onChange={update('zipCode')} placeholder="01234-567" />
+      </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <Button type="submit" variant="primary" loading={saving}>
+        {saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+        {saved ? 'Salvo!' : 'Salvar alterações'}
+      </Button>
+    </form>
   );
 }
 

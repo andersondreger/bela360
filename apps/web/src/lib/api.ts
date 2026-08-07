@@ -152,11 +152,28 @@ export interface Business {
   type: string;
   status: string;
   whatsappConnected: boolean;
+  phone?: string;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
   settings?: { branding?: BusinessBranding; [key: string]: unknown };
+}
+
+export interface BusinessInfoUpdate {
+  name?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
 }
 
 export const businessApi = {
   getCurrent: () => api.get<Business>('/business'),
+
+  updateInfo: (info: BusinessInfoUpdate) => api.put<Business>('/business', info),
 
   updateBranding: (branding: BusinessBranding) =>
     api.put<Business>('/business', { settings: { branding } }),
