@@ -79,7 +79,12 @@ export class WhatsAppService {
   async getInstanceStatus(): Promise<InstanceInfo> {
     try {
       const response = await this.client.get(`/instance/connectionState/${this.instanceName}`);
-      return response.data;
+      // A Evolution API devolve { instance: { instanceName, state } }, nao
+      // { instanceName, state } direto - sem esse unwrap, "state" sempre
+      // vinha undefined e qualquer `status.state === 'open'` dava falso
+      // mesmo com a instancia de verdade conectada (achado 2026-08-08
+      // investigando o bug do "Aguardando leitura do QR Code" travado).
+      return response.data?.instance ?? response.data;
     } catch (error) {
       logger.error({ error, instanceName: this.instanceName }, 'Failed to get instance status');
       throw error;

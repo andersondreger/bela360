@@ -69,6 +69,13 @@ export function WhatsAppConfigModal({
       setState('connecting');
       setError(null);
       const result = await whatsappApi.connect();
+      if (result.status === 'already_connected') {
+        // Ja estava pareado - nao ha QR pra mostrar. Sem esse caso, a tela
+        // ficava presa pra sempre no spinner "Aguardando leitura do QR
+        // Code" mesmo com tudo conectado (bug reportado em 2026-08-08).
+        await checkStatus();
+        return;
+      }
       setQrCode(result.qrcode);
     } catch (err) {
       setState('error');
@@ -188,10 +195,12 @@ export function WhatsAppConfigModal({
                 </div>
               )}
 
-              <p className="mt-8 text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Aguardando leitura do QR Code...
-              </p>
+              {qrCode && (
+                <p className="mt-8 text-sm text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Aguardando leitura do QR Code...
+                </p>
+              )}
             </div>
           )}
 

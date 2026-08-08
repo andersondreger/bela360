@@ -4,6 +4,7 @@ import { prisma, logger, env } from '../../config';
 import { getWhatsAppService, getSystemWhatsAppService, SYSTEM_INSTANCE_NAME } from './whatsapp.service';
 import { messageQueue } from './whatsapp.queue';
 import { parseWebhookMessage } from './whatsapp.utils';
+import { handleAttendantMessage } from './attendant.service';
 import { AppError } from '../../common/errors';
 
 // Validation schemas
@@ -138,6 +139,28 @@ export class WhatsAppController {
       // Create instance if not exists
       await whatsapp.createInstance();
 
+      // Se a instancia ja esta pareada (aberta), pedir um QR novo pra ela
+      // nao devolve nada pra escanear - a Evolution simplesmente nao manda
+      // base64 porque nao ha handshake pendente. Sem esse check, o front
+      // ficava preso pra sempre no spinner "Aguardando leitura do QR Code"
+      // (nunca recebia QR nem confirmacao) e ainda marcava o negocio como
+      // desconectado no banco mesmo estando conectado de verdade - bug real
+      // reportado pelo Anderson em 2026-08-08.
+      const currentStatus = await whatsapp.getInstanceStatus();
+      if (currentStatus.state === 'open') {
+        if (!business.whatsappConnected) {
+          await prisma.business.update({
+            where: { id: businessId },
+            data: { whatsappInstanceId: instanceName, whatsappConnected: true, whatsappConnectedAt: new Date() },
+          });
+        }
+        res.json({
+          success: true,
+          data: { instanceName, qrcode: null, status: 'already_connected' },
+        });
+        return;
+      }
+
       // Configure webhook
       const webhookUrl = `${process.env.API_URL}/api/whatsapp/webhook`;
       await whatsapp.configureWebhook({
@@ -193,12 +216,28 @@ export class WhatsAppController {
       const whatsapp = getWhatsAppService(business.whatsappInstanceId);
       const status = await whatsapp.getInstanceStatus();
 
+      // A flag whatsappConnected no banco pode ficar desatualizada em
+      // relacao ao estado real da instancia (ex: webhook perdido, ou o bug
+      // do connectInstance corrigido em 2026-08-08 que zerava a flag sem
+      // necessidade) - reconcilia aqui pra "connected" sempre refletir o
+      // que a Evolution diz agora, nao um snapshot antigo.
+      const reallyConnected = status.state === 'open';
+      if (reallyConnected !== business.whatsappConnected) {
+        await prisma.business.update({
+          where: { id: businessId },
+          data: {
+            whatsappConnected: reallyConnected,
+            whatsappConnectedAt: reallyConnected ? (business.whatsappConnectedAt ?? new Date()) : null,
+          },
+        });
+      }
+
       res.json({
         success: true,
         data: {
-          connected: business.whatsappConnected,
+          connected: reallyConnected,
           state: status.state,
-          connectedAt: business.whatsappConnectedAt,
+          connectedAt: reallyConnected ? business.whatsappConnectedAt : null,
         },
       });
     } catch (error) {
@@ -321,6 +360,22 @@ export class WhatsAppController {
       const { event, instance, data } = req.body;
 
       logger.debug({ event, instance }, 'Webhook received');
+
+      // bela360_system nao pertence a nenhum negocio - e a Ana, atendimento
+      // comercial do proprio bela360 (landing page "Falar com a gente").
+      if (instance === SYSTEM_INSTANCE_NAME) {
+        if (event === 'messages.upsert') {
+          const messages = Array.isArray(data) ? data : [data];
+          for (const msg of messages) {
+            if (msg.key?.fromMe) continue;
+            const parsed = parseWebhookMessage(msg);
+            if (parsed?.text) {
+              await handleAttendantMessage(parsed.phoneNumber, parsed.text);
+            }
+          }
+        }
+        return res.sendStatus(200);
+      }
 
       // Find business by instance
       const business = await prisma.business.findFirst({

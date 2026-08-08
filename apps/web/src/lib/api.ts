@@ -512,8 +512,8 @@ export interface WhatsAppStatus {
 
 export interface WhatsAppConnectResult {
   instanceName: string;
-  qrcode: string;
-  status: string;
+  qrcode: string | null;
+  status: 'awaiting_scan' | 'already_connected';
 }
 
 export const whatsappApi = {
