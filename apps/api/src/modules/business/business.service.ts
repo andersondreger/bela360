@@ -2,6 +2,8 @@ import { prisma, logger } from '../../config';
 import { BusinessType, UserRole, DayOfWeek } from '@prisma/client';
 import { AppError } from '../../common/errors';
 import { agentesService } from '../agentes';
+import { automationService } from '../automation/automation.service';
+import { authService } from '../auth/auth.service';
 
 interface CreateBusinessDTO {
   name: string;
@@ -139,6 +141,10 @@ export class BusinessService {
     // Create the 6 fixed meeting agents (Renato, Marina, Vitor, Leo, Ana, Theo)
     await agentesService.ensureAgentesForBusiness(business.id);
 
+    // Create default automations (pós-atendimento, retorno, aniversário,
+    // reativação) desligadas - o dono liga em /automacao quando quiser.
+    await automationService.initializeDefaults(business.id);
+
     // Create default message templates
     await prisma.messageTemplate.createMany({
       data: [
@@ -168,6 +174,17 @@ export class BusinessService {
         },
       ],
     });
+
+    // Boas-vindas + primeiro codigo de acesso num WhatsApp so, pro dono nao
+    // precisar descobrir sozinho que o login e por codigo (ver
+    // AuthService.sendWelcomeOtp). Nunca lanca - cadastro nao pode falhar
+    // por causa do envio do WhatsApp.
+    const owner = business.users[0];
+    if (owner) {
+      await authService.sendWelcomeOtp(owner.id, owner.phone, business.name).catch((error) => {
+        logger.error({ error, businessId: business.id }, 'Falha ao enviar boas-vindas com OTP');
+      });
+    }
 
     logger.info({ businessId: business.id }, 'Business created successfully');
 

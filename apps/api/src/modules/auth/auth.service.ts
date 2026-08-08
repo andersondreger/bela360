@@ -28,6 +28,43 @@ export class AuthService {
   }
 
   /**
+   * Gera um OTP, salva no usuario + Redis (backup) e aplica o cooldown de
+   * reenvio - logica compartilhada entre requestOTP (login) e
+   * sendWelcomeOtp (logo apos o cadastro), pra nao duplicar as regras de
+   * expiracao/cooldown/backup em dois lugares.
+   */
+  private async issueOtp(userId: string, phone: string): Promise<string> {
+    const otp = this.generateOTP();
+    const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { otpCode: otp, otpExpiresAt: expiresAt },
+    });
+
+    await redis.setex(`otp:cooldown:${phone}`, this.OTP_COOLDOWN_SECONDS, '1');
+    await redis.setex(`otp:${phone}`, this.OTP_EXPIRY_MINUTES * 60, otp);
+
+    return otp;
+  }
+
+  /**
+   * Envia uma mensagem de WhatsApp pela instancia de sistema, sem derrubar
+   * o fluxo chamador se a instancia estiver desconectada (mesmo
+   * comportamento tolerante que requestOTP ja tinha).
+   */
+  private async sendSystemWhatsapp(phone: string, text: string): Promise<void> {
+    try {
+      const systemWhatsApp = getSystemWhatsAppService();
+      await systemWhatsApp.sendText({ number: phone, text });
+      logger.info({ phone }, 'Mensagem enviada via WhatsApp de sistema');
+    } catch (error) {
+      logger.error({ error, phone }, 'Falha ao enviar WhatsApp via instancia de sistema');
+      // Segue o fluxo mesmo assim - o OTP fica no Redis/banco pra verificacao manual.
+    }
+  }
+
+  /**
    * Request OTP for phone number
    */
   async requestOTP(phone: string): Promise<{ sent: boolean; expiresIn: number }> {
@@ -56,42 +93,33 @@ export class AuthService {
       return { sent: true, expiresIn: this.OTP_EXPIRY_MINUTES * 60 };
     }
 
-    // Generate OTP
-    const otp = this.generateOTP();
-    const expiresAt = new Date(Date.now() + this.OTP_EXPIRY_MINUTES * 60 * 1000);
+    const otp = await this.issueOtp(user.id, normalizedPhone);
 
-    // Save OTP to user
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        otpCode: otp,
-        otpExpiresAt: expiresAt,
-      },
-    });
-
-    // Set cooldown
-    await redis.setex(cooldownKey, this.OTP_COOLDOWN_SECONDS, '1');
-
-    // Send OTP via system WhatsApp instance
-    try {
-      const systemWhatsApp = getSystemWhatsAppService();
-      await systemWhatsApp.sendText({
-        number: normalizedPhone,
-        text: `🔐 Seu código de acesso bela360:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos.\n\nSe você não solicitou este código, ignore esta mensagem.`,
-      });
-      logger.info({ phone: normalizedPhone }, 'OTP sent via system WhatsApp');
-    } catch (error) {
-      logger.error({ error, phone: normalizedPhone }, 'Failed to send OTP via WhatsApp');
-      // Continue anyway - OTP is stored in Redis for manual verification during testing
-    }
-
-    // Also store OTP in Redis for backup verification
-    const otpKey = `otp:${normalizedPhone}`;
-    await redis.setex(otpKey, this.OTP_EXPIRY_MINUTES * 60, otp);
+    await this.sendSystemWhatsapp(
+      normalizedPhone,
+      `🔐 Seu código de acesso bela360:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos.\n\nSe você não solicitou este código, ignore esta mensagem.`
+    );
 
     logger.info({ phone: normalizedPhone }, 'OTP sent successfully');
 
     return { sent: true, expiresIn: this.OTP_EXPIRY_MINUTES * 60 };
+  }
+
+  /**
+   * Chamado logo apos o cadastro (BusinessService.create) - manda boas-vindas
+   * + o primeiro codigo de acesso numa unica mensagem, pra dono novo nao
+   * precisar descobrir sozinho que precisa ir em "Entrar com codigo do
+   * WhatsApp". Nunca lanca erro: cadastro nao pode falhar por causa disso
+   * (mesma tolerancia do requestOTP se a instancia de sistema estiver fora).
+   */
+  async sendWelcomeOtp(userId: string, phone: string, businessName: string): Promise<void> {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const otp = await this.issueOtp(userId, normalizedPhone);
+
+    await this.sendSystemWhatsapp(
+      normalizedPhone,
+      `🎉 Bem-vindo(a) ao bela360, ${businessName}!\n\nSeu código de acesso:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos. Use esse número de WhatsApp pra entrar na sua conta em bela360.wayia.com.br/login.`
+    );
   }
 
   /**
