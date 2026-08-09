@@ -516,6 +516,25 @@ export interface WhatsAppConnectResult {
   status: 'awaiting_scan' | 'already_connected';
 }
 
+export interface ConversationClient {
+  id: string;
+  name: string;
+  phone: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  content: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  createdAt: string;
+}
+
+export interface Conversation {
+  client: ConversationClient;
+  lastMessage: ConversationMessage | null;
+  unreadCount: number;
+}
+
 export const whatsappApi = {
   connect: () => api.post<WhatsAppConnectResult>('/whatsapp/connect'),
 
@@ -524,6 +543,14 @@ export const whatsappApi = {
   getQRCode: () => api.get<{ qrcode: string }>('/whatsapp/qrcode'),
 
   disconnect: () => api.post<{ message: string }>('/whatsapp/disconnect'),
+
+  listConversations: () => api.get<Conversation[]>('/whatsapp/conversations'),
+
+  getConversationMessages: (clientId: string) =>
+    api.get<ConversationMessage[]>(`/whatsapp/conversations/${clientId}/messages`),
+
+  sendConversationMessage: (clientId: string, message: string) =>
+    api.post<ConversationMessage>(`/whatsapp/conversations/${clientId}/messages`, { message }),
 };
 
 // Analytics API

@@ -1,33 +1,102 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Settings, Send } from 'lucide-react';
 import { WhatsAppConfigModal } from '@/components/WhatsAppConfigModal';
 import { Button, Badge, Input, PageHeader } from '@/components/ui';
+import { whatsappApi, type Conversation, type ConversationMessage } from '@/lib/api';
 
-const mockConversations = [
-  { id: '1', clientName: 'Maria Silva', lastMessage: 'Quero agendar um corte para amanha', time: '10:30', unread: 2, status: 'waiting' },
-  { id: '2', clientName: 'Joao Santos', lastMessage: 'Confirmado! Ate amanha as 14h', time: '10:15', unread: 0, status: 'resolved' },
-  { id: '3', clientName: 'Carla Oliveira', lastMessage: 'Qual horario tem disponivel?', time: '09:45', unread: 1, status: 'waiting' },
-  { id: '4', clientName: 'Pedro Costa', lastMessage: 'Ok, vou remarcar entao', time: '09:30', unread: 0, status: 'resolved' },
-  { id: '5', clientName: 'Ana Souza', lastMessage: 'Boa tarde! Gostaria de saber o preco da coloracao', time: 'Ontem', unread: 1, status: 'waiting' },
-];
+function formatTime(iso: string | undefined) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const today = new Date();
+  const isToday = date.toDateString() === today.toDateString();
+  if (isToday) return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
 
-const mockMessages = [
-  { id: '1', content: 'Ola! Gostaria de agendar um horario', direction: 'inbound', time: '10:25' },
-  { id: '2', content: 'Ola Maria! Claro, qual servico voce gostaria?', direction: 'outbound', time: '10:26' },
-  { id: '3', content: 'Quero fazer um corte', direction: 'inbound', time: '10:28' },
-  { id: '4', content: 'Otimo! Temos horarios disponiveis amanha. Qual horario seria melhor para voce?', direction: 'outbound', time: '10:29' },
-  { id: '5', content: 'Quero agendar um corte para amanha', direction: 'inbound', time: '10:30' },
-];
+function initials(name: string) {
+  return name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase();
+}
 
 export default function WhatsAppPage() {
-  const [selectedConversation, setSelectedConversation] = useState<string | null>('1');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [search, setSearch] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const selectedConv = mockConversations.find(c => c.id === selectedConversation);
+  const loadConversations = useCallback(async () => {
+    try {
+      const data = await whatsappApi.listConversations();
+      setConversations(data);
+    } catch {
+      // silencioso - o badge de status já mostra se o WhatsApp está desconectado
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+    const interval = setInterval(loadConversations, 15000);
+    return () => clearInterval(interval);
+  }, [loadConversations]);
+
+  useEffect(() => {
+    whatsappApi
+      .getStatus()
+      .then((s) => setIsConnected(s.connected))
+      .catch(() => setIsConnected(false));
+  }, []);
+
+  const loadMessages = useCallback(async (clientId: string) => {
+    setLoadingMessages(true);
+    try {
+      const data = await whatsappApi.getConversationMessages(clientId);
+      setMessages(data);
+    } catch {
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedClientId) loadMessages(selectedClientId);
+  }, [selectedClientId, loadMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const selectedConv = conversations.find(c => c.client.id === selectedClientId);
+
+  const filteredConversations = conversations.filter(c =>
+    c.client.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSend = async () => {
+    if (!message.trim() || !selectedClientId || sending) return;
+    setSending(true);
+    const text = message;
+    setMessage('');
+    try {
+      const sent = await whatsappApi.sendConversationMessage(selectedClientId, text);
+      setMessages(prev => [...prev, sent]);
+      loadConversations();
+    } catch {
+      setMessage(text);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="h-[calc(100vh-8rem)]">
@@ -52,36 +121,55 @@ export default function WhatsAppPage() {
         {/* Conversations List */}
         <div className="w-80 border-r border-border flex flex-col">
           <div className="p-4 border-b border-border">
-            <Input type="text" placeholder="Buscar conversa..." />
+            <Input
+              type="text"
+              placeholder="Buscar conversa..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
           <div className="flex-1 overflow-y-auto">
-            {mockConversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => setSelectedConversation(conv.id)}
-                className={`w-full p-4 text-left hover:bg-muted border-b border-border/60 transition-colors ${
-                  selectedConversation === conv.id ? 'bg-primary/10' : ''
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-medium shrink-0">
-                    {conv.clientName.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-foreground truncate">{conv.clientName}</p>
-                      <span className="text-xs text-muted-foreground">{conv.time}</span>
+            {loadingConversations ? (
+              <p className="p-4 text-sm text-muted-foreground">Carregando conversas...</p>
+            ) : filteredConversations.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground">
+                {isConnected
+                  ? 'Nenhuma conversa ainda. Assim que um cliente mandar mensagem, ela aparece aqui.'
+                  : 'Conecte o WhatsApp pra começar a receber conversas.'}
+              </p>
+            ) : (
+              filteredConversations.map((conv) => (
+                <button
+                  key={conv.client.id}
+                  onClick={() => setSelectedClientId(conv.client.id)}
+                  className={`w-full p-4 text-left hover:bg-muted border-b border-border/60 transition-colors ${
+                    selectedClientId === conv.client.id ? 'bg-primary/10' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-medium shrink-0">
+                      {initials(conv.client.name)}
                     </div>
-                    <p className="text-sm text-muted-foreground truncate">{conv.lastMessage}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-foreground truncate">{conv.client.name}</p>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(conv.lastMessage?.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {conv.lastMessage?.content ?? ''}
+                      </p>
+                    </div>
+                    {conv.unreadCount > 0 && (
+                      <span className="w-5 h-5 bg-gradient-brand text-white text-xs rounded-full flex items-center justify-center shrink-0">
+                        {conv.unreadCount}
+                      </span>
+                    )}
                   </div>
-                  {conv.unread > 0 && (
-                    <span className="w-5 h-5 bg-gradient-brand text-white text-xs rounded-full flex items-center justify-center shrink-0">
-                      {conv.unread}
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
+                </button>
+              ))
+            )}
           </div>
         </div>
 
@@ -92,42 +180,43 @@ export default function WhatsAppPage() {
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-medium">
-                  {selectedConv.clientName.split(' ').map(n => n[0]).join('')}
+                  {initials(selectedConv.client.name)}
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{selectedConv.clientName}</p>
-                  <p className="text-xs text-muted-foreground">Ultima mensagem: {selectedConv.time}</p>
+                  <p className="font-medium text-foreground">{selectedConv.client.name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedConv.client.phone}</p>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm">Ver perfil</Button>
-                <Button variant="primary" size="sm">Agendar</Button>
               </div>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background">
-              {mockMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
-                >
+              {loadingMessages ? (
+                <p className="text-sm text-muted-foreground">Carregando mensagens...</p>
+              ) : (
+                messages.map((msg) => (
                   <div
-                    className={`max-w-[70%] px-4 py-2 rounded-2xl ${
-                      msg.direction === 'outbound'
-                        ? 'bg-gradient-brand text-white rounded-br-md'
-                        : 'bg-card text-foreground rounded-bl-md border border-border'
-                    }`}
+                    key={msg.id}
+                    className={`flex ${msg.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <p>{msg.content}</p>
-                    <p className={`text-xs mt-1 ${
-                      msg.direction === 'outbound' ? 'text-white/70' : 'text-muted-foreground'
-                    }`}>
-                      {msg.time}
-                    </p>
+                    <div
+                      className={`max-w-[70%] px-4 py-2 rounded-2xl ${
+                        msg.direction === 'OUTBOUND'
+                          ? 'bg-gradient-brand text-white rounded-br-md'
+                          : 'bg-card text-foreground rounded-bl-md border border-border'
+                      }`}
+                    >
+                      <p>{msg.content}</p>
+                      <p className={`text-xs mt-1 ${
+                        msg.direction === 'OUTBOUND' ? 'text-white/70' : 'text-muted-foreground'
+                      }`}>
+                        {formatTime(msg.createdAt)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
@@ -138,10 +227,11 @@ export default function WhatsAppPage() {
                     type="text"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Digite sua mensagem..."
                   />
                 </div>
-                <Button variant="primary" disabled={!message.trim()}>
+                <Button variant="primary" disabled={!message.trim() || sending} onClick={handleSend}>
                   <Send className="h-4 w-4" />
                   Enviar
                 </Button>
