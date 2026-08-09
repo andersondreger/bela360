@@ -1,4 +1,5 @@
 export * from './AuroraBackground';
+export * from './GoldDust';
 export * from './Logo';
 export * from './Button';
 export * from './Card';

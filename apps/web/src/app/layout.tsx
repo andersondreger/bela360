@@ -1,10 +1,17 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Fraunces } from 'next/font/google';
 import '../styles/globals.css';
 
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
+});
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-display',
+  axes: ['opsz', 'SOFT', 'WONK'],
+  style: ['normal', 'italic'],
 });
 
 export const metadata: Metadata = {
@@ -33,7 +40,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${inter.variable} ${fraunces.variable} font-sans antialiased`}>
+        {children}
+      </body>
     </html>
   );
 }

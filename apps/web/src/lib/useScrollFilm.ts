@@ -58,7 +58,16 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
         .from('[data-hero-badge]', { opacity: 0, y: -14, duration: 0.6, ease: 'power3.out' })
         .from(
           '[data-hero-word]',
-          { opacity: 0, y: 36, duration: 0.7, stagger: 0.035, ease: 'power3.out' },
+          {
+            opacity: 0,
+            y: 36,
+            rotateX: -50,
+            transformPerspective: 500,
+            transformOrigin: '50% 100%',
+            duration: 0.7,
+            stagger: 0.035,
+            ease: 'power3.out',
+          },
           '-=0.3'
         )
         .from('[data-hero-copy]', { opacity: 0, y: 18, duration: 0.6, ease: 'power3.out' }, '-=0.45')
@@ -104,6 +113,56 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
         });
       }
 
+      // ---- Hero image: mirror-tilt parallax as the visitor scrolls past ----
+      if (heroSection) {
+        gsap.to('[data-hero-parallax]', {
+          rotateY: -9,
+          rotateX: 3,
+          scale: 1.05,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroSection,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: true,
+          },
+        });
+      }
+
+      // ---- Aurora glow: each section's glow layer drifts at its own depth ----
+      root.querySelectorAll<HTMLElement>('[data-aurora-parallax]').forEach((layer) => {
+        const section = layer.closest('section');
+        if (!section) return;
+        gsap.to(layer, {
+          yPercent: 16,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: section,
+            start: 'top bottom',
+            end: 'bottom top',
+            scrub: true,
+          },
+        });
+      });
+
+      // ---- Mirror-wipe: a specular light sweep flashes as the hero cuts to content ----
+      const mirrorWipe = root.querySelector('[data-mirror-wipe]');
+      const mirrorBand = root.querySelector('[data-mirror-band]');
+      if (mirrorWipe && mirrorBand && heroSection) {
+        gsap
+          .timeline({
+            scrollTrigger: {
+              trigger: heroSection,
+              start: 'bottom bottom',
+              end: 'bottom top',
+              scrub: true,
+            },
+          })
+          .fromTo(mirrorBand, { xPercent: -150 }, { xPercent: 250, ease: 'none' }, 0)
+          .fromTo(mirrorWipe, { opacity: 0 }, { opacity: 1, ease: 'none' }, 0)
+          .to(mirrorWipe, { opacity: 0, ease: 'none' }, 0.55);
+      }
+
       // ---- Nav: solidify once the hero has scrolled past ----
       const navEl = root.querySelector('[data-nav]');
       if (navEl && heroSection) {
@@ -120,6 +179,7 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
         gsap.from(el, {
           opacity: 0,
           y: 44,
+          scale: 0.96,
           duration: 0.75,
           ease: 'power3.out',
           scrollTrigger: {
@@ -131,6 +191,9 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
       });
 
       // ---- Grouped staggered reveal (card grids) ----
+      // rotateX+transformPerspective gives each card a slight "catching the light"
+      // tilt as it settles in, instead of a flat fade — keeps the mirror motif going
+      // past the hero without touching the aurora/gold-dust layers.
       root.querySelectorAll<HTMLElement>('[data-reveal-group]').forEach((group) => {
         const items = group.querySelectorAll<HTMLElement>('[data-reveal-item]');
         if (!items.length) return;
@@ -138,6 +201,9 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
           opacity: 0,
           y: 52,
           scale: 0.95,
+          rotateX: 8,
+          transformPerspective: 800,
+          transformOrigin: '50% 100%',
           duration: 0.7,
           stagger: 0.12,
           ease: 'power3.out',

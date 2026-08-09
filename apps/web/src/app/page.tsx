@@ -20,7 +20,7 @@ import {
   MapPin,
   Phone,
 } from 'lucide-react';
-import { AuroraBackground, Logo, Button, Card } from '@/components/ui';
+import { AuroraBackground, GoldDust, Logo, Button, Card } from '@/components/ui';
 import { useScrollFilm } from '@/lib/useScrollFilm';
 
 /**
@@ -139,6 +139,21 @@ export default function HomePage() {
 
   return (
     <main ref={containerRef} className="relative overflow-hidden">
+      <GoldDust />
+
+      {/* Mirror-wipe: a specular light sweep flashed across the frame as the hero
+          cuts to the content below, like light catching a mirror mid-turn. */}
+      <div
+        data-mirror-wipe
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-40 overflow-hidden opacity-0"
+      >
+        <div
+          data-mirror-band
+          className="absolute -inset-y-1/4 -left-1/3 w-1/3 rotate-12 bg-gradient-to-r from-transparent via-white/60 to-transparent blur-md"
+        />
+      </div>
+
       {/* Hero */}
       <section id="topo" className="relative flex min-h-screen flex-col overflow-hidden p-4">
         <AuroraBackground />
@@ -183,11 +198,11 @@ export default function HomePage() {
               <Sparkles className="h-3.5 w-3.5 text-bela-gold" />
               Feito para salões, barbearias e clínicas de estética
             </span>
-            <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl">
+            <h1 className="font-display text-4xl font-semibold leading-[1.05] text-white sm:text-5xl md:text-6xl">
               <SplitWords text="Automação completa para o seu" />
               <SplitWords
                 text="negócio de beleza"
-                wordClassName="bg-gradient-to-r from-bela-pink via-bela-violet to-bela-gold bg-clip-text text-transparent"
+                wordClassName="bg-gradient-to-r from-bela-pink via-bela-violet to-bela-gold bg-clip-text text-transparent italic"
               />
             </h1>
             <p data-hero-copy className="mx-auto mt-6 max-w-xl text-lg text-white/70 lg:mx-0">
@@ -216,32 +231,38 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div data-hero-exit className="relative mx-auto w-full max-w-sm lg:max-w-[380px]">
-            <div
-              data-hero-image
-              className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-white/10 shadow-2xl"
-            >
-              <Image
-                src="/images/landing/hero-styling.jpg"
-                alt="Profissional de salão finalizando um penteado"
-                fill
-                priority
-                sizes="(max-width: 1024px) 70vw, 380px"
-                className="object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-bela-plum/60 via-transparent to-transparent" />
-            </div>
-            <div
-              data-hero-float
-              className="glass-dark noise-overlay absolute -bottom-6 -left-6 hidden rounded-2xl p-4 shadow-2xl sm:block"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand text-white">
-                  <CalendarCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">Confirmado no WhatsApp</p>
-                  <p className="text-xs text-white/60">Sem ligação, sem esquecer</p>
+          <div
+            data-hero-exit
+            className="relative mx-auto w-full max-w-sm lg:max-w-[380px]"
+            style={{ perspective: '1400px' }}
+          >
+            <div data-hero-parallax className="relative">
+              <div
+                data-hero-image
+                className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-white/10 shadow-2xl"
+              >
+                <Image
+                  src="/images/landing/hero-styling.jpg"
+                  alt="Profissional de salão finalizando um penteado"
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 70vw, 380px"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-bela-plum/60 via-transparent to-transparent" />
+              </div>
+              <div
+                data-hero-float
+                className="glass-dark noise-overlay absolute -bottom-6 -left-6 hidden rounded-2xl p-4 shadow-2xl sm:block"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand text-white">
+                    <CalendarCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Confirmado no WhatsApp</p>
+                    <p className="text-xs text-white/60">Sem ligação, sem esquecer</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -253,7 +274,9 @@ export default function HomePage() {
       <section id="recursos" className="relative bg-background py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
           <div data-reveal className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold sm:text-4xl">Tudo que o seu salão precisa</h2>
+            <h2 className="font-display text-3xl font-semibold sm:text-4xl">
+              Tudo que o seu salão precisa
+            </h2>
             <p className="mt-4 text-muted-foreground">
               Substitua a agenda de papel, os grupos de WhatsApp bagunçados e as planilhas por um
               único sistema que trabalha por você.
@@ -279,7 +302,9 @@ export default function HomePage() {
         <AuroraBackground variant="subtle" />
         <div className="relative mx-auto w-full max-w-6xl px-4">
           <div data-reveal className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">Por que escolher o bela360</h2>
+            <h2 className="font-display text-3xl font-semibold text-white sm:text-4xl">
+              Por que escolher o bela360
+            </h2>
           </div>
 
           <div data-reveal-group className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -300,7 +325,9 @@ export default function HomePage() {
       <section className="relative bg-background py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
           <div data-reveal className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold sm:text-4xl">Um painel, tudo organizado</h2>
+            <h2 className="font-display text-3xl font-semibold sm:text-4xl">
+              Um painel, tudo organizado
+            </h2>
             <p className="mt-4 text-muted-foreground">
               Agenda, financeiro e conversas em um só lugar, com o visual do bela360.
             </p>
@@ -376,7 +403,9 @@ export default function HomePage() {
       <section className="relative bg-muted/30 py-24">
         <div className="mx-auto w-full max-w-6xl px-4">
           <div data-reveal className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold sm:text-4xl">Para todo tipo de negócio de beleza</h2>
+            <h2 className="font-display text-3xl font-semibold sm:text-4xl">
+              Para todo tipo de negócio de beleza
+            </h2>
             <p className="mt-4 text-muted-foreground">
               Salão, barbearia, clínica de estética ou spa: o bela360 se adapta ao seu atendimento.
             </p>
@@ -410,7 +439,7 @@ export default function HomePage() {
         <AuroraBackground variant="subtle" />
         <div className="relative mx-auto w-full max-w-6xl px-4">
           <div data-reveal className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl">
+            <h2 className="font-display text-3xl font-semibold text-white sm:text-4xl">
               Comece a usar em 3 passos
             </h2>
           </div>
@@ -460,7 +489,9 @@ export default function HomePage() {
       {/* Final CTA */}
       <section id="contato" className="relative overflow-hidden bg-background py-24">
         <div data-reveal className="mx-auto w-full max-w-4xl px-4 text-center">
-          <h2 className="text-3xl font-bold sm:text-4xl">Pronta para automatizar seu salão?</h2>
+          <h2 className="font-display text-3xl font-semibold sm:text-4xl">
+            Pronta para automatizar seu salão?
+          </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
             Cadastre seu negócio agora e comece a atender pelo WhatsApp ainda hoje.
           </p>
@@ -471,7 +502,11 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <a href="mailto:atendimento@wayia.com.br">
+            <a
+              href="https://wa.me/5545991397543?text=Oi%2C%20quero%20saber%20mais%20sobre%20o%20bela360"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Falar com a gente
               </Button>

@@ -17,6 +17,7 @@ export function AuroraBackground({ className, variant = 'vivid' }: AuroraBackgro
   return (
     <div
       aria-hidden
+      data-aurora-parallax
       className={cn(
         'pointer-events-none absolute inset-0 overflow-hidden',
         variant === 'vivid' ? 'bg-bela-plum' : 'bg-transparent',

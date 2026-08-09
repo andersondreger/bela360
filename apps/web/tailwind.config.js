@@ -71,6 +71,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'ui-serif', 'serif'],
       },
       keyframes: {
         'accordion-down': {
