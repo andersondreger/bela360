@@ -119,6 +119,25 @@ export class AuthService {
   }
 
   /**
+   * Vincula o chat direto (sem token) e reenvia o OTP que ja estava pendente
+   * pra esse usuario - usado pelo cadastro feito dentro do proprio Telegram
+   * (telegram-signup.service.ts), onde o chatId ja e conhecido de cara e o
+   * codigo de boas-vindas foi emitido um passo antes, so sem chegar em
+   * nenhum canal ainda porque o telegramChatId nao existia no momento do
+   * cadastro.
+   */
+  async relayCurrentOtpToTelegram(userId: string, chatId: string): Promise<void> {
+    const user = await prisma.user.update({ where: { id: userId }, data: { telegramChatId: chatId } });
+
+    if (user.otpCode && user.otpExpiresAt && user.otpExpiresAt > new Date()) {
+      await telegramClient.sendMessage(
+        chatId,
+        `🔐 Seu código de acesso bela360:\n\n*${user.otpCode}*\n\nVálido por alguns minutos.`
+      );
+    }
+  }
+
+  /**
    * Request OTP for phone number
    */
   async requestOTP(phone: string): Promise<{ sent: boolean; expiresIn: number }> {

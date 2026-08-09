@@ -3,6 +3,7 @@ import { env, logger } from '../../config';
 import { handleAttendantMessage } from '../attendant';
 import { authService } from '../auth/auth.service';
 import { telegramClient } from './telegram.client';
+import { startSignup, handleSignupMessage } from './telegram-signup.service';
 
 export class TelegramController {
   async handleWebhook(req: Request, res: Response) {
@@ -19,11 +20,20 @@ export class TelegramController {
       const text = message?.text;
 
       if (chatId !== undefined && typeof text === 'string' && text.length > 0) {
+        const id = String(chatId);
         const startMatch = text.match(/^\/start\s+(\S+)/);
+
         if (startMatch) {
-          await this.handleStart(String(chatId), startMatch[1]);
+          await this.handleStart(id, startMatch[1]);
+        } else if (/^\/cadastrar\b/i.test(text.trim())) {
+          await telegramClient.sendMessage(id, await startSignup(id));
         } else {
-          await handleAttendantMessage('telegram', String(chatId), text);
+          const signupReply = await handleSignupMessage(id, text);
+          if (signupReply !== null) {
+            await telegramClient.sendMessage(id, signupReply);
+          } else {
+            await handleAttendantMessage('telegram', id, text);
+          }
         }
       }
 

@@ -27,7 +27,7 @@ O bela360 é um sistema de automação para salões, barbearias, clínicas de es
 
 Sobre preço: você não tem uma tabela de planos pra citar. Se perguntarem, diga que o cadastro inicial é gratuito (é a chamada "Cadastre seu salão grátis" do site) e que pra falar de plano pago o ideal é continuar com um humano — nunca invente valor.
 
-Seu objetivo: tirar dúvida de dono de salão/barbearia/clínica que chegou pelo site, explicar como o bela360 funciona, e incentivar o cadastro gratuito quando fizer sentido. Seja direta, calorosa, em português do Brasil, sem emoji em excesso. Respostas curtas — isso é WhatsApp/Telegram, não e-mail. Se a pergunta fugir do que você sabe sobre o bela360, ou pedirem preço fechado/negociação, diga que vai chamar alguém do time pra continuar.`;
+Seu objetivo: tirar dúvida de dono de salão/barbearia/clínica que chegou pelo site ou pelo Telegram, explicar como o bela360 funciona, e incentivar o cadastro gratuito quando fizer sentido. Seja direta, calorosa, em português do Brasil, sem emoji em excesso. Respostas curtas — isso é WhatsApp/Telegram, não e-mail. Se a pergunta fugir do que você sabe sobre o bela360, ou pedirem preço fechado/negociação, diga que vai chamar alguém do time pra continuar.`;
 
 function historyKey(channel: AttendantChannel, externalId: string): string {
   return `attendant:history:${channel}:${externalId}`;
@@ -65,11 +65,16 @@ async function sendReply(channel: AttendantChannel, externalId: string, text: st
 export async function handleAttendantMessage(channel: AttendantChannel, externalId: string, text: string): Promise<void> {
   const history = await getHistory(channel, externalId);
 
+  const system =
+    channel === 'telegram'
+      ? `${SYSTEM_PROMPT}\n\nEssa conversa é pelo Telegram. Se a pessoa quiser se cadastrar, diga pra mandar o comando /cadastrar que o próprio bot já faz o cadastro completo ali na hora, sem precisar abrir o site.`
+      : SYSTEM_PROMPT;
+
   try {
     const response = await anthropic.messages.create({
       model: env.ANTHROPIC_MODEL,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system,
       output_config: { effort: 'medium' },
       messages: [...history, { role: 'user', content: text }],
     });
