@@ -86,6 +86,7 @@ services:
       - ASAAS_SUBSCRIPTION_VALUE=${ASAAS_SUBSCRIPTION_VALUE}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
     depends_on:
       postgres:
         condition: service_healthy

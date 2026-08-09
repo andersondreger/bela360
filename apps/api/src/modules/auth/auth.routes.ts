@@ -20,6 +20,7 @@ const authAttemptLimiter = rateLimit({
 router.post('/otp/request', authAttemptLimiter, (req, res, next) => authController.requestOTP(req, res, next));
 router.post('/otp/verify', authAttemptLimiter, (req, res, next) => authController.verifyOTP(req, res, next));
 router.post('/login', authAttemptLimiter, (req, res, next) => authController.login(req, res, next));
+router.post('/telegram/link', authAttemptLimiter, (req, res, next) => authController.requestTelegramLink(req, res, next));
 router.post('/refresh', (req, res, next) => authController.refreshToken(req, res, next));
 
 // Protected routes

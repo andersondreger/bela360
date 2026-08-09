@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { motion } from 'framer-motion';
-import { KeyRound, Lock, Phone } from 'lucide-react';
+import { KeyRound, Lock, Phone, Send } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -33,6 +33,23 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [telegramLink, setTelegramLink] = useState('');
+  const [linkingTelegram, setLinkingTelegram] = useState(false);
+
+  const handleTelegramLink = async () => {
+    setLinkingTelegram(true);
+    try {
+      const res = await fetch('/api/auth/telegram/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.replace(/\D/g, '') }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) setTelegramLink(data.data.link);
+    } finally {
+      setLinkingTelegram(false);
+    }
+  };
 
   const handlePasswordLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -216,6 +233,27 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
           >
             Usar outro número
           </button>
+
+          {telegramLink ? (
+            <a
+              href={telegramLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 text-sm font-medium text-primary hover:underline"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Abrir o Telegram e receber o código por lá
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={handleTelegramLink}
+              disabled={linkingTelegram}
+              className="w-full text-center text-xs text-muted-foreground hover:underline"
+            >
+              Não chegou o WhatsApp? Receber o código pelo Telegram
+            </button>
+          )}
         </form>
       )}
     </motion.div>

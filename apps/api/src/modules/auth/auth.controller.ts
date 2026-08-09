@@ -22,6 +22,10 @@ const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
+const telegramLinkSchema = z.object({
+  phone: z.string().min(10).max(15),
+});
+
 export class AuthController {
   /**
    * Request OTP for login
@@ -130,6 +134,22 @@ export class AuthController {
           business: user!.business,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Gera o link pra vincular a conta ao bot do Telegram (@Bela360bot) -
+   * canal alternativo pra receber OTP/boas-vindas enquanto o WhatsApp de
+   * sistema nao conecta.
+   */
+  async requestTelegramLink(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { phone } = telegramLinkSchema.parse(req.body);
+      const result = await authService.requestTelegramLink(phone);
+
+      res.json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

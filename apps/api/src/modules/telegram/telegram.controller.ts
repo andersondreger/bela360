@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { env, logger } from '../../config';
 import { handleAttendantMessage } from '../attendant';
+import { authService } from '../auth/auth.service';
+import { telegramClient } from './telegram.client';
 
 export class TelegramController {
   async handleWebhook(req: Request, res: Response) {
@@ -17,7 +19,12 @@ export class TelegramController {
       const text = message?.text;
 
       if (chatId !== undefined && typeof text === 'string' && text.length > 0) {
-        await handleAttendantMessage('telegram', String(chatId), text);
+        const startMatch = text.match(/^\/start\s+(\S+)/);
+        if (startMatch) {
+          await this.handleStart(String(chatId), startMatch[1]);
+        } else {
+          await handleAttendantMessage('telegram', String(chatId), text);
+        }
       }
 
       res.sendStatus(200);
@@ -26,6 +33,21 @@ export class TelegramController {
       // Sempre 200 pro Telegram nao ficar reenviando o mesmo update.
       res.sendStatus(200);
     }
+  }
+
+  /**
+   * "/start <token>" vincula esse chat a uma conta bela360 ja existente
+   * (token gerado por POST /auth/telegram/link). Fora isso, mensagens vao
+   * pra Ana normalmente.
+   */
+  private async handleStart(chatId: string, token: string): Promise<void> {
+    const result = await authService.linkTelegram(token, chatId);
+
+    const text = result.linked
+      ? `Conta vinculada, ${result.userName}! A partir de agora seu código de acesso do bela360 também chega por aqui.`
+      : 'Esse link já expirou ou não é válido. Gere um novo na tela de login do bela360 e tenta de novo.';
+
+    await telegramClient.sendMessage(chatId, text);
   }
 }
 

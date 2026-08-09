@@ -30,6 +30,7 @@ const envSchema = z.object({
   // nao esta conectado — opcional ate ter um bot configurado)
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  TELEGRAM_BOT_USERNAME: z.string().default('Bela360bot'),
 
   // URLs
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),

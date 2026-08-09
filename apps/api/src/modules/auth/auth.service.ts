@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import { prisma, redis, logger, env } from '../../config';
 import { getSystemWhatsAppService } from '../whatsapp/whatsapp.service';
+import { telegramClient } from '../telegram/telegram.client';
 import { AppError } from '../../common/errors';
 import { verifyPassword } from '../../common/password';
 
@@ -19,6 +21,7 @@ interface AuthTokens {
 export class AuthService {
   private readonly OTP_EXPIRY_MINUTES = 5;
   private readonly OTP_COOLDOWN_SECONDS = 60;
+  private readonly TELEGRAM_LINK_TTL_SECONDS = 10 * 60;
 
   /**
    * Generate OTP code
@@ -65,6 +68,57 @@ export class AuthService {
   }
 
   /**
+   * Manda a mesma mensagem por todo canal que o usuario tiver disponivel:
+   * sempre tenta WhatsApp (instancia de sistema), e tambem Telegram se o
+   * usuario ja vinculou um chat (ver linkTelegram). Nenhum dos dois derruba
+   * o fluxo chamador se falhar - o OTP sempre fica no Redis/banco como
+   * ultimo recurso.
+   */
+  private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
+    await Promise.all([
+      this.sendSystemWhatsapp(user.phone, text),
+      user.telegramChatId ? telegramClient.sendMessage(user.telegramChatId, text) : Promise.resolve(),
+    ]);
+  }
+
+  /**
+   * Gera um link de vinculo pro Telegram (@Bela360bot) pro dono de uma conta
+   * que ja existe, pra ele poder receber OTP/boas-vindas por la enquanto o
+   * WhatsApp de sistema nao conecta. Nao revela se o telefone existe ou nao
+   * (mesma postura do requestOTP) - o token sempre e gerado, so nao vincula
+   * nada se o telefone nao bater com nenhuma conta quando o /start chegar.
+   */
+  async requestTelegramLink(phone: string): Promise<{ botUsername: string; link: string; token: string }> {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const token = randomBytes(16).toString('hex');
+
+    await redis.setex(`telegram:link:${token}`, this.TELEGRAM_LINK_TTL_SECONDS, normalizedPhone);
+
+    const botUsername = env.TELEGRAM_BOT_USERNAME || 'Bela360bot';
+    return { botUsername, link: `https://t.me/${botUsername}?start=${token}`, token };
+  }
+
+  /**
+   * Chamado pelo webhook do Telegram quando chega "/start <token>". Resolve
+   * o telefone que gerou o token, acha o usuario e grava o chatId. Silencioso
+   * se o token expirou/nao existe ou o telefone nao bate com nenhuma conta -
+   * quem chama decide o que responder ao usuario no chat.
+   */
+  async linkTelegram(token: string, chatId: string): Promise<{ linked: boolean; userName?: string }> {
+    const phone = await redis.get(`telegram:link:${token}`);
+    if (!phone) return { linked: false };
+
+    const user = await prisma.user.findFirst({ where: { phone } });
+    if (!user) return { linked: false };
+
+    await prisma.user.update({ where: { id: user.id }, data: { telegramChatId: chatId } });
+    await redis.del(`telegram:link:${token}`);
+
+    logger.info({ userId: user.id }, 'Conta vinculada ao Telegram');
+    return { linked: true, userName: user.name };
+  }
+
+  /**
    * Request OTP for phone number
    */
   async requestOTP(phone: string): Promise<{ sent: boolean; expiresIn: number }> {
@@ -95,8 +149,8 @@ export class AuthService {
 
     const otp = await this.issueOtp(user.id, normalizedPhone);
 
-    await this.sendSystemWhatsapp(
-      normalizedPhone,
+    await this.notifyUser(
+      user,
       `🔐 Seu código de acesso bela360:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos.\n\nSe você não solicitou este código, ignore esta mensagem.`
     );
 
@@ -116,8 +170,8 @@ export class AuthService {
     const normalizedPhone = phone.replace(/\D/g, '');
     const otp = await this.issueOtp(userId, normalizedPhone);
 
-    await this.sendSystemWhatsapp(
-      normalizedPhone,
+    await this.notifyUser(
+      { id: userId, phone: normalizedPhone, telegramChatId: null },
       `🎉 Bem-vindo(a) ao bela360, ${businessName}!\n\nSeu código de acesso:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos. Use esse número de WhatsApp pra entrar na sua conta em bela360.wayia.com.br/login.`
     );
   }
