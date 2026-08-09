@@ -4,7 +4,7 @@ import { prisma, logger, env } from '../../config';
 import { getWhatsAppService, getSystemWhatsAppService, SYSTEM_INSTANCE_NAME } from './whatsapp.service';
 import { messageQueue } from './whatsapp.queue';
 import { parseWebhookMessage, isGroupMessage } from './whatsapp.utils';
-import { handleAttendantMessage } from './attendant.service';
+import { handleAttendantMessage } from '../attendant';
 import { AppError } from '../../common/errors';
 
 // Validation schemas
@@ -376,7 +376,7 @@ export class WhatsAppController {
             if (isGroupMessage(msg.key?.remoteJid || '')) continue;
             const parsed = parseWebhookMessage(msg);
             if (parsed?.text) {
-              await handleAttendantMessage(parsed.phoneNumber, parsed.text);
+              await handleAttendantMessage('whatsapp', parsed.phoneNumber, parsed.text);
             }
           }
         }

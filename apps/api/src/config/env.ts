@@ -22,9 +22,14 @@ const envSchema = z.object({
   EVOLUTION_API_KEY: z.string(),
   EVOLUTION_INSTANCE_NAME: z.string().default('bela360'),
 
-  // Anthropic (Ana — atendimento comercial via WhatsApp)
+  // Anthropic (Ana — atendimento comercial via WhatsApp/Telegram)
   ANTHROPIC_API_KEY: z.string(),
   ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
+
+  // Telegram (canal alternativo pra Ana enquanto o WhatsApp institucional
+  // nao esta conectado — opcional ate ter um bot configurado)
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
 
   // URLs
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
