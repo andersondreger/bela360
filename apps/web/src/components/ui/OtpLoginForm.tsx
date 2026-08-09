@@ -26,7 +26,11 @@ function formatPhone(value: string) {
 }
 
 export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
-  const [mode, setMode] = useState<'otp' | 'password'>('password');
+  // OTP é o caminho padrão: toda conta nova (site ou /cadastrar no Telegram)
+  // nasce sem senha, então a aba de senha só serve pra quem já definiu uma
+  // manualmente. Começar em 'password' fazia todo mundo cair num "inválido"
+  // sem entender por quê.
+  const [mode, setMode] = useState<'otp' | 'password'>('otp');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
