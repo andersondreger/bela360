@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma, logger, env } from '../../config';
 import { getWhatsAppService, getSystemWhatsAppService, SYSTEM_INSTANCE_NAME } from './whatsapp.service';
 import { messageQueue } from './whatsapp.queue';
-import { parseWebhookMessage } from './whatsapp.utils';
+import { parseWebhookMessage, isGroupMessage } from './whatsapp.utils';
 import { handleAttendantMessage } from './attendant.service';
 import { AppError } from '../../common/errors';
 
@@ -151,7 +151,12 @@ export class WhatsAppController {
         if (!business.whatsappConnected) {
           await prisma.business.update({
             where: { id: businessId },
-            data: { whatsappInstanceId: instanceName, whatsappConnected: true, whatsappConnectedAt: new Date() },
+            data: {
+              whatsappInstanceId: instanceName,
+              whatsappConnected: true,
+              whatsappConnectedAt: new Date(),
+              ...(business.status === 'PENDING' ? { status: 'ACTIVE' as const } : {}),
+            },
           });
         }
         res.json({
@@ -368,6 +373,7 @@ export class WhatsAppController {
           const messages = Array.isArray(data) ? data : [data];
           for (const msg of messages) {
             if (msg.key?.fromMe) continue;
+            if (isGroupMessage(msg.key?.remoteJid || '')) continue;
             const parsed = parseWebhookMessage(msg);
             if (parsed?.text) {
               await handleAttendantMessage(parsed.phoneNumber, parsed.text);
@@ -389,7 +395,7 @@ export class WhatsAppController {
 
       switch (event) {
         case 'connection.update':
-          await this.handleConnectionUpdate(business.id, data);
+          await this.handleConnectionUpdate(business.id, business.status, data);
           break;
 
         case 'messages.upsert':
@@ -418,7 +424,7 @@ export class WhatsAppController {
   /**
    * Handle connection status changes
    */
-  private async handleConnectionUpdate(businessId: string, data: any) {
+  private async handleConnectionUpdate(businessId: string, currentStatus: string, data: any) {
     const { state } = data;
 
     if (state === 'open') {
@@ -427,6 +433,7 @@ export class WhatsAppController {
         data: {
           whatsappConnected: true,
           whatsappConnectedAt: new Date(),
+          ...(currentStatus === 'PENDING' ? { status: 'ACTIVE' as const } : {}),
         },
       });
       logger.info({ businessId }, 'WhatsApp connected');
@@ -450,6 +457,12 @@ export class WhatsAppController {
     for (const msg of messages) {
       // Skip messages sent by us
       if (msg.key?.fromMe) continue;
+
+      // Skip mensagens de grupo: o bot atende conversas individuais com o
+      // negocio, nao chat de grupo. Sem isso, o JID numerico do grupo era
+      // tratado como "telefone" de cliente e a resposta automatica falhava
+      // ao tentar enviar pra um numero que nao existe.
+      if (isGroupMessage(msg.key?.remoteJid || '')) continue;
 
       const parsed = parseWebhookMessage(msg);
       if (!parsed) continue;
