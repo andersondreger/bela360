@@ -78,6 +78,13 @@ enum PlatformModule {
   INVENTORY
 }
 
+enum SubscriptionStatus {
+  PENDING_PAYMENT // criada no Asaas, aguardando confirmação da 1a cobrança
+  ACTIVE
+  OVERDUE
+  CANCELLED
+}
+
 // Os 6 papeis fixos de agente de reuniao. DIRETOR (Renato) comanda os outros
 // 5; GESTAO_CORPORATIVA (Marina) organiza dados/pauta. Kai (infraestrutura)
 // nao e um papel aqui: ele fica fora desta hierarquia de propósito.
@@ -126,6 +133,7 @@ model Business {
   type          BusinessType   @default(SALON)
   status        BusinessStatus @default(PENDING)
   isTestAccount Boolean        @default(false) // sandbox/cliente de teste: Kai ativa capacidades novas aqui sem aprovacao
+  document      String? // CPF/CNPJ do responsavel, exigido pelo Asaas pra criar cobranca
 
   // Address
   address String?
@@ -176,6 +184,7 @@ model Business {
 
   // Platform plan
   platformCoupons PlatformCoupon[]
+  subscription    Subscription?
 
   // Agentes de reuniao e infraestrutura Kai
   agentes  Agente[]
@@ -1507,6 +1516,33 @@ model PlatformCoupon {
   @@index([businessId])
   @@index([code])
   @@map("platform_coupons")
+}
+
+// Assinatura recorrente do negocio na plataforma bela360, cobrada via Asaas.
+// Uma unica assinatura por business; quando ativa, desbloqueia PREMIUM_MODULES
+// do mesmo jeito que um PlatformCoupon (grava expiry em business.settings.premiumModules),
+// so que renovando sozinha a cada ciclo em vez de expirar.
+model Subscription {
+  id         String @id @default(cuid())
+  businessId String @unique
+
+  asaasCustomerId     String // cliente correspondente no Asaas
+  asaasSubscriptionId String @unique // assinatura recorrente no Asaas
+
+  planCode String @default("PREMIUM") // hoje so existe um plano; campo existe pra crescer sem migration
+  value    Decimal @db.Decimal(10, 2)
+
+  status         SubscriptionStatus @default(PENDING_PAYMENT)
+  nextDueDate    DateTime?
+  cancelledAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("subscriptions")
 }
 
 // ============================================

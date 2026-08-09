@@ -14,6 +14,7 @@
     "prisma": "prisma"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@bela360/shared": "workspace:*",
     "@prisma/client": "^5.8.0",
     "axios": "^1.6.5",

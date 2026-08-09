@@ -22,6 +22,10 @@ const envSchema = z.object({
   EVOLUTION_API_KEY: z.string(),
   EVOLUTION_INSTANCE_NAME: z.string().default('bela360'),
 
+  // Anthropic (Ana — atendimento comercial via WhatsApp)
+  ANTHROPIC_API_KEY: z.string(),
+  ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
+
   // URLs
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   API_URL: z.string().url().default('http://localhost:3001'),
@@ -32,6 +36,12 @@ const envSchema = z.object({
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+
+  // Asaas (cobranca da assinatura SaaS do bela360) — opcional ate ter conta real
+  ASAAS_API_KEY: z.string().optional(),
+  ASAAS_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
+  ASAAS_WEBHOOK_TOKEN: z.string().optional(),
+  ASAAS_SUBSCRIPTION_VALUE: z.coerce.number().default(97),
 });
 
 export type Env = z.infer<typeof envSchema>;

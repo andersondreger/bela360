@@ -22,6 +22,7 @@ import { professionalRoutes } from './modules/professional';
 import { platformRoutes, requirePremiumModule } from './modules/platform';
 import { agentesRoutes } from './modules/agentes';
 import { kaiRoutes } from './modules/kai';
+import { billingRoutes } from './modules/billing';
 import { PlatformModule } from '@prisma/client';
 import { authMiddleware } from './common/middleware/auth.middleware';
 
@@ -109,6 +110,7 @@ app.get('/api', (_req: Request, res: Response) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/public/business', publicBusinessRoutes);
 app.use('/api/business', authMiddleware, businessRoutes);
 app.use('/api/services', authMiddleware, servicesRoutes);
