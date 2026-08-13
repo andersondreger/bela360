@@ -52,6 +52,11 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
       const onLoad = () => ScrollTrigger.refresh();
       window.addEventListener('load', onLoad);
 
+      // Aura/ring wrappers are centered by GSAP (not CSS translate), since the
+      // intro/scroll tweens below own their transform — CSS animations on the
+      // inner elements handle the continuous pulse/spin independently.
+      gsap.set(['[data-hero-aura]', '[data-hero-ring]'], { xPercent: -50, yPercent: -50 });
+
       // ---- Hero: one-shot intro on load ----
       const heroTl = gsap.timeline({ delay: 0.15 });
       heroTl
@@ -88,6 +93,16 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
           '-=0.85'
         )
         .from(
+          '[data-hero-aura]',
+          { opacity: 0, scale: 0.4, duration: 1.3, ease: 'power2.out' },
+          '-=0.9'
+        )
+        .from(
+          '[data-hero-ring]',
+          { opacity: 0, scale: 0.6, rotate: -40, duration: 1.3, ease: 'power2.out' },
+          '-=1.1'
+        )
+        .from(
           '[data-hero-float]',
           { opacity: 0, y: 20, scale: 0.9, duration: 0.5, ease: 'back.out(1.7)' },
           '-=0.35'
@@ -119,6 +134,33 @@ export function useScrollFilm(containerRef: RefObject<HTMLElement>) {
           rotateY: -9,
           rotateX: 3,
           scale: 1.05,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroSection,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: true,
+          },
+        });
+      }
+
+      // ---- Empower aura: gold/violet glow swells and the power ring spins up
+      // as the visitor scrolls through the hero, like Ana's energy is building. ----
+      if (heroSection) {
+        gsap.to('[data-hero-aura]', {
+          scale: 1.5,
+          opacity: 0.6,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroSection,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: true,
+          },
+        });
+        gsap.to('[data-hero-ring]', {
+          scale: 1.25,
+          rotate: 140,
           ease: 'none',
           scrollTrigger: {
             trigger: heroSection,

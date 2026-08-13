@@ -91,12 +91,22 @@ module.exports = {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-14px)' },
         },
+        'aura-pulse': {
+          '0%, 100%': { transform: 'scale(1)', opacity: 0.7 },
+          '50%': { transform: 'scale(1.12)', opacity: 1 },
+        },
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         blob: 'blob 18s ease-in-out infinite',
         'float-slow': 'float-slow 6s ease-in-out infinite',
+        'aura-pulse': 'aura-pulse 4.5s ease-in-out infinite',
+        'spin-slow': 'spin-slow 14s linear infinite',
       },
     },
   },
