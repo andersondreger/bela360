@@ -274,6 +274,9 @@ export default function AgendaPage() {
                             <div className={`p-2 rounded-lg text-xs ${statusPillClasses(appointment.status)}`}>
                               <p className="font-medium truncate">{appointment.client?.name || 'Cliente'}</p>
                               <p className="truncate">{appointment.service?.name || 'Serviço'}</p>
+                              {appointment.client?.phone && (
+                                <p className="truncate opacity-75">{appointment.client.phone}</p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -388,10 +391,6 @@ export default function AgendaPage() {
           <>
             <div className="space-y-4">
               <div className="flex justify-between py-2 border-b border-border">
-                <span className="text-muted-foreground">Cliente</span>
-                <span className="font-medium">{selectedAppointment.client?.name || 'Cliente'}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-border">
                 <span className="text-muted-foreground">Servico</span>
                 <span>{selectedAppointment.service?.name || 'Serviço'}</span>
               </div>
@@ -409,6 +408,74 @@ export default function AgendaPage() {
                   {statusLabel(selectedAppointment.status)}
                 </span>
               </div>
+              {selectedAppointment.notes && (
+                <div className="flex justify-between py-2 border-b border-border">
+                  <span className="text-muted-foreground">Observações</span>
+                  <span className="text-right max-w-[60%]">{selectedAppointment.notes}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Dados completos do cliente */}
+            <div className="mt-4 rounded-xl border border-border p-4 space-y-2">
+              <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Cliente</p>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Nome</span>
+                <span className="font-medium">{selectedAppointment.client?.name || 'Cliente'}</span>
+              </div>
+              {selectedAppointment.client?.phone && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Telefone</span>
+                  <a
+                    href={`https://wa.me/${selectedAppointment.client.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {selectedAppointment.client.phone}
+                  </a>
+                </div>
+              )}
+              {selectedAppointment.client?.email && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">E-mail</span>
+                  <span className="font-medium">{selectedAppointment.client.email}</span>
+                </div>
+              )}
+              {selectedAppointment.client?.birthDate && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Aniversário</span>
+                  <span className="font-medium">
+                    {new Date(selectedAppointment.client.birthDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Total de visitas</span>
+                <span className="font-medium">{selectedAppointment.client?.totalAppointments ?? 0}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Total gasto</span>
+                <span className="font-medium">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                    Number(selectedAppointment.client?.totalSpent) || 0
+                  )}
+                </span>
+              </div>
+              {selectedAppointment.client?.lastVisitAt && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Última visita</span>
+                  <span className="font-medium">
+                    {new Date(selectedAppointment.client.lastVisitAt).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+              )}
+              {selectedAppointment.client?.notes && (
+                <div className="pt-2 border-t border-border">
+                  <span className="text-muted-foreground text-sm">Observações do cliente</span>
+                  <p className="text-sm mt-1">{selectedAppointment.client.notes}</p>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">

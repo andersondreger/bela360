@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, Save, MessageCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Save, MessageCircle, CheckCircle2, Sparkles, Upload, Loader2 } from 'lucide-react';
 import { PageHeader, Button, Input, Badge } from '@/components/ui';
 import {
   businessApi,
   platformApi,
+  uploadImage,
   PREMIUM_MODULE_LABELS,
   type Business,
   type BusinessBranding,
@@ -324,6 +325,8 @@ function MarcaTab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     businessApi
@@ -349,6 +352,22 @@ function MarcaTab() {
     }
   };
 
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    setError('');
+    try {
+      const { url } = await uploadImage(file);
+      setBranding((b) => ({ ...b, logoUrl: url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao enviar o logo.');
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
   if (loading) {
     return <p className="text-muted-foreground">Carregando...</p>;
   }
@@ -356,7 +375,7 @@ function MarcaTab() {
   return (
     <div className="space-y-6 max-w-2xl">
       <p className="text-muted-foreground">
-        Personalize como o seu negócio aparece dentro do painel: nome de exibição, logo e cor principal.
+        Personalize como o seu negócio aparece dentro do painel: nome de exibição, logo e cor principal — no lugar do logo padrão do bela360.
       </p>
 
       <Input
@@ -367,13 +386,29 @@ function MarcaTab() {
         onChange={(e) => setBranding((b) => ({ ...b, displayName: e.target.value }))}
       />
 
-      <Input
-        label="URL do logo"
-        type="url"
-        placeholder="https://.../logo.png"
-        value={branding.logoUrl || ''}
-        onChange={(e) => setBranding((b) => ({ ...b, logoUrl: e.target.value }))}
-      />
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">Logo do negócio</label>
+        <div className="flex items-center gap-3">
+          {branding.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={branding.logoUrl} alt="Logo" className="h-12 w-12 rounded-xl object-cover border border-border" />
+          ) : (
+            <div className="h-12 w-12 rounded-xl border border-dashed border-border" />
+          )}
+          <Button type="button" variant="outline" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+            {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploadingLogo ? 'Enviando...' : branding.logoUrl ? 'Trocar logo' : 'Enviar logo'}
+          </Button>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleLogoChange}
+          />
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">JPG, PNG ou WEBP, até 5MB.</p>
+      </div>
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">Cor principal</label>

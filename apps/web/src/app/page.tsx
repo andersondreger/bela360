@@ -163,7 +163,7 @@ export default function HomePage() {
           className="fixed inset-x-0 top-0 z-30 transition-colors duration-300 data-[scrolled=true]:bg-bela-plum/80 data-[scrolled=true]:backdrop-blur-xl data-[scrolled=true]:shadow-lg"
         >
           <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
-            <Logo wordmarkClassName="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
+            <Logo />
             <div className="hidden items-center gap-8 lg:flex">
               {NAV_LINKS.map((link) => (
                 <a
@@ -237,19 +237,35 @@ export default function HomePage() {
             style={{ perspective: '1400px' }}
           >
             <div data-hero-parallax className="relative">
+              {/* Empower aura: soft gold/violet glow breathing behind Ana, like she's
+                  radiating the power the salão gets from the automação. GSAP drives the
+                  wrapper's intro/scroll transform; the CSS animation drives the inner
+                  element's own transform, so the two never fight over the same property. */}
               <div
-                data-hero-image
-                className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-white/10 shadow-2xl"
+                data-hero-aura
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2 -z-10 aspect-square w-[130%]"
               >
+                <div className="h-full w-full animate-aura-pulse rounded-full bg-[radial-gradient(circle,rgba(240,180,41,0.45)_0%,rgba(168,85,247,0.3)_45%,transparent_72%)] blur-2xl" />
+              </div>
+              {/* Power ring: slow-spinning conic halo, the "energy" the aura radiates. */}
+              <div
+                data-hero-ring
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2 -z-10 aspect-square w-[105%]"
+              >
+                <div className="h-full w-full animate-spin-slow rounded-full opacity-60 [background:conic-gradient(from_0deg,transparent_0deg,rgba(240,180,41,0.55)_60deg,transparent_140deg,rgba(236,72,153,0.5)_220deg,transparent_320deg)] [mask:radial-gradient(farthest-side,transparent_calc(100%-3px),black_calc(100%-2px))]" />
+              </div>
+
+              <div data-hero-image className="relative aspect-[4/5] w-full">
                 <Image
-                  src="/images/landing/hero-styling.jpg"
-                  alt="Profissional de salão finalizando um penteado"
+                  src="/images/landing/hero-ana.png"
+                  alt="Ana, a assistente de IA do bela360, pronta para atender seu salão"
                   fill
                   priority
                   sizes="(max-width: 1024px) 70vw, 380px"
-                  className="object-cover"
+                  className="object-contain object-bottom drop-shadow-[0_25px_45px_rgba(0,0,0,0.5)]"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-bela-plum/60 via-transparent to-transparent" />
               </div>
               <div
                 data-hero-float
@@ -502,13 +518,9 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <a
-              href="https://wa.me/5545991397543?text=Oi%2C%20quero%20saber%20mais%20sobre%20o%20bela360"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a href="https://t.me/Bela360bot" target="_blank" rel="noopener noreferrer">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                Falar com a gente
+                Falar com a gente no Telegram
               </Button>
             </a>
           </div>
@@ -520,7 +532,7 @@ export default function HomePage() {
         <div className="mx-auto w-full max-w-6xl px-4">
           <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <Logo mark={true} wordmarkClassName="text-foreground" />
+              <Logo mark={true} />
               <p className="mt-4 text-sm text-muted-foreground">
                 Automação completa para salões, barbearias e clínicas de estética.
               </p>

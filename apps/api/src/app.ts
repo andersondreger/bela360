@@ -1,4 +1,5 @@
 import express, { Application, Request, Response } from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -6,6 +7,7 @@ import pinoHttp from 'pino-http';
 import { env, logger } from './config';
 import { errorHandler } from './common/middleware';
 import { whatsappRoutes } from './modules/whatsapp';
+import { uploadsRoutes } from './modules/uploads';
 import { authRoutes } from './modules/auth';
 import { businessRoutes, publicBusinessRoutes } from './modules/business';
 import { servicesRoutes } from './modules/services';
@@ -107,6 +109,10 @@ app.get('/api', (_req: Request, res: Response) => {
     },
   });
 });
+
+// Uploaded images (logo do negócio, avatar) — serve publico, sem auth, pra <img src> funcionar direto
+app.use('/api/uploads', express.static(path.join(process.cwd(), 'apps/api/uploads')));
+app.use('/api/uploads', authMiddleware, uploadsRoutes);
 
 // API Routes
 app.use('/api/auth', authRoutes);

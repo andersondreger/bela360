@@ -26,6 +26,17 @@ const telegramLinkSchema = z.object({
   phone: z.string().min(10).max(15),
 });
 
+const updateProfileSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  email: z.string().email().nullable().optional(),
+  avatarUrl: z.string().url().nullable().optional(),
+});
+
+const setPasswordSchema = z.object({
+  currentPassword: z.string().min(6).optional(),
+  newPassword: z.string().min(6),
+});
+
 export class AuthController {
   /**
    * Request OTP for login
@@ -235,14 +246,55 @@ export class AuthController {
             name: user.name,
             phone: user.phone,
             email: user.email,
+            avatarUrl: user.avatarUrl,
             role: user.role,
             isActive: user.isActive,
             isSuperAdmin: user.isSuperAdmin,
             lastLoginAt: user.lastLoginAt,
+            hasPassword: !!user.passwordHash,
           },
           business: user.business,
         },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Update own profile (name/email/avatar)
+   */
+  async updateMe(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = updateProfileSchema.parse(req.body);
+      const user = await authService.updateProfile(req.user!.userId, data);
+
+      res.json({
+        success: true,
+        data: {
+          user: {
+            id: user.id,
+            name: user.name,
+            phone: user.phone,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Set/change own password
+   */
+  async setPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { currentPassword, newPassword } = setPasswordSchema.parse(req.body);
+      await authService.setPassword(req.user!.userId, currentPassword, newPassword);
+
+      res.json({ success: true, data: { message: 'Senha atualizada com sucesso' } });
     } catch (error) {
       next(error);
     }

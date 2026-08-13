@@ -135,7 +135,46 @@ export const api = {
       body: data ? JSON.stringify(data) : undefined,
     }),
 
+  patch: <T>(endpoint: string, data?: unknown) =>
+    request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
+};
+
+/** Upload de imagem (logo do negócio, avatar) — multipart, sem Content-Type manual pro browser setar o boundary. */
+export async function uploadImage(file: File): Promise<{ url: string }> {
+  const token = getAccessToken();
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/uploads/image`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+    credentials: 'include',
+  });
+
+  const json: ApiResponse<{ url: string }> = await response.json();
+  if (!response.ok || !json.success) {
+    throw new ApiError(json.error?.message || 'Erro ao enviar imagem', response.status);
+  }
+  return json.data as { url: string };
+}
+
+// Auth / own-profile API
+export interface UpdateMeInput {
+  name?: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+}
+
+export const authApi = {
+  updateMe: (data: UpdateMeInput) => api.patch<{ user: { id: string; name: string; phone: string; email: string | null; avatarUrl: string | null } }>('/auth/me', data),
+  setPassword: (data: { currentPassword?: string; newPassword: string }) =>
+    api.post<{ message: string }>('/auth/password', data),
 };
 
 // Business API
@@ -233,6 +272,8 @@ export interface Client {
   preferredProfessionalId?: string | null;
   totalAppointments: number;
   totalSpent: number;
+  lastVisitAt?: string | null;
+  optOut?: boolean;
   createdAt: string;
 }
 
@@ -243,7 +284,7 @@ export const clientsApi = {
   getById: (id: string) => api.get<Client>(`/clients/${id}`),
   create: (data: { name: string; phone: string; email?: string; birthDate?: string; notes?: string }) =>
     api.post<Client>('/clients', data),
-  update: (id: string, data: Partial<{ name: string; phone: string; email: string; notes: string }>) =>
+  update: (id: string, data: Partial<{ name: string; phone: string; email: string; notes: string; optOut: boolean }>) =>
     api.put<Client>(`/clients/${id}`, data),
   delete: (id: string) => api.delete<{ message: string }>(`/clients/${id}`),
 };
@@ -364,6 +405,16 @@ export const inventoryApi = {
 };
 
 // Marketing API (premium module — expect isPremiumLockedError on a básico plan)
+export interface SegmentClient {
+  id: string;
+  name: string;
+  phone: string;
+  birthDate?: string | null;
+  lastVisitAt?: string | null;
+  totalAppointments: number;
+  totalSpent: number;
+}
+
 export const marketingApi = {
   listCampaigns: (status?: string) => api.get<any[]>(`/marketing/campaigns${status ? `?status=${status}` : ''}`),
   getCampaignStats: () => api.get<any>('/marketing/campaigns/stats'),
@@ -373,6 +424,7 @@ export const marketingApi = {
   listRatings: () => api.get<any[]>('/marketing/ratings'),
   getRatingStats: () => api.get<any>('/marketing/ratings/stats'),
   getSegments: () => api.get<any>('/marketing/segments'),
+  getSegmentClients: (segment: string) => api.get<SegmentClient[]>(`/marketing/segments/${segment}/clients`),
   getSuggestions: () => api.get<any[]>('/marketing/suggestions'),
   generateSuggestions: () => api.post<{ message: string }>('/marketing/suggestions/generate'),
   getIdleSlots: () => api.get<any[]>('/marketing/idle-slots'),

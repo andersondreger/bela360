@@ -211,6 +211,7 @@ model User {
   lastLoginAt  DateTime?
   passwordHash String? // Fallback login (scrypt "salt:hash"), independent of WhatsApp OTP delivery
   telegramChatId String? @unique // canal alternativo pra receber OTP/boas-vindas enquanto o WhatsApp de sistema nao conecta
+  avatarUrl    String?
 
   // Professional specific
   color      String? // Calendar color
@@ -310,6 +311,7 @@ model Client {
   email      String?
   birthDate  DateTime?
   notes      String?
+  optOut     Boolean   @default(false) // cliente pediu pra nao receber campanhas de marketing (LGPD)
 
   // Preferences
   preferredProfessionalId String?

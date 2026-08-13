@@ -76,6 +76,7 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [telegramLink, setTelegramLink] = useState('');
 
   const update = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const raw = e.target.value;
@@ -127,6 +128,19 @@ export default function OnboardingPage() {
 
       setDone(true);
       setStep(3);
+
+      const ownerPhone = sameAsBusinessPhone ? form.phone.replace(/\D/g, '') : form.ownerPhone.replace(/\D/g, '');
+      try {
+        const linkRes = await fetch(`${API_BASE_URL}/auth/telegram/link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: ownerPhone }),
+        });
+        const linkData = await linkRes.json();
+        if (linkRes.ok && linkData.success) setTelegramLink(linkData.data.link);
+      } catch {
+        // Sem link direto, a pessoa ainda consegue vincular manualmente na tela de login.
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível concluir o cadastro');
     } finally {
@@ -146,7 +160,7 @@ export default function OnboardingPage() {
       >
         <div className="mb-8 text-center">
           <a href="/" className="mb-4 flex justify-center">
-            <Logo wordmarkClassName="text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
+            <Logo />
           </a>
           <p className="flex items-center justify-center gap-1.5 text-sm text-white/70">
             <Sparkles className="h-3.5 w-3.5 text-bela-gold" />
@@ -168,15 +182,32 @@ export default function OnboardingPage() {
                 <CheckCircle2 className="mx-auto mb-4 h-14 w-14 text-emerald-400" />
                 <h2 className="text-xl font-semibold text-white">Salão cadastrado!</h2>
                 <p className="mx-auto mt-2 max-w-sm text-sm text-white/70">
-                  Enviamos as próximas instruções por WhatsApp para{' '}
+                  Seu código de acesso já foi gerado para{' '}
                   <span className="font-medium text-white">
                     {sameAsBusinessPhone ? form.phone : form.ownerPhone}
                   </span>
-                  . Use esse número para entrar na sua conta.
+                  . Abra o Telegram pra receber na hora.
                 </p>
-                <Button className="mt-6 w-full" size="lg" onClick={() => (window.location.href = '/login')}>
-                  Ir para o login
-                </Button>
+                {telegramLink ? (
+                  <a href={telegramLink} target="_blank" rel="noopener noreferrer" className="mt-6 block">
+                    <Button className="w-full" size="lg">
+                      Abrir o Telegram e receber o código
+                    </Button>
+                  </a>
+                ) : (
+                  <Button className="mt-6 w-full" size="lg" onClick={() => (window.location.href = '/login')}>
+                    Ir para o login
+                  </Button>
+                )}
+                {telegramLink && (
+                  <button
+                    type="button"
+                    className="mt-3 text-xs text-white/50 underline underline-offset-2 hover:text-white/70"
+                    onClick={() => (window.location.href = '/login')}
+                  >
+                    Já recebi o código, ir para o login
+                  </button>
+                )}
               </motion.div>
             ) : step === 1 ? (
               <motion.div

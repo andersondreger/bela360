@@ -11,7 +11,9 @@ const createClientSchema = z.object({
   preferredProfessionalId: z.string().cuid().optional(),
 });
 
-const updateClientSchema = createClientSchema.partial();
+const updateClientSchema = createClientSchema.partial().extend({
+  optOut: z.boolean().optional(),
+});
 
 const filtersSchema = z.object({
   search: z.string().optional(),

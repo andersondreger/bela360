@@ -49,7 +49,7 @@ export default function LoginPage() {
       >
         <div className="mb-8 text-center">
           <a href="/" className="mb-4 flex justify-center">
-            <Logo wordmarkClassName="text-white bg-none text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-bela-gold" />
+            <Logo />
           </a>
           <p className="flex items-center justify-center gap-1.5 text-sm text-white/70">
             <Sparkles className="h-3.5 w-3.5 text-bela-gold" />

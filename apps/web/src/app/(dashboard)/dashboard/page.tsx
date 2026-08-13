@@ -26,6 +26,7 @@ import {
   ProfessionalReport,
 } from '@/lib/api';
 import { ExportButton, SimpleExportButton } from '@/components/ExportButton';
+import { PageHeader } from '@/components/ui';
 import {
   exportData,
   ExportFormat,
@@ -277,12 +278,7 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Bem-vindo ao bela360. Aqui está o resumo do seu dia.
-          </p>
-        </div>
+        <PageHeader title="Dashboard" description="Bem-vindo ao bela360. Aqui está o resumo do seu dia." />
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 dark:border-red-500/20 dark:bg-red-500/10">
           <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
             <AlertCircle className="h-5 w-5" />
@@ -353,15 +349,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Bem-vindo ao bela360. Aqui está o resumo do seu dia.
-          </p>
-        </div>
-        <ExportButton onExport={handleExportDashboard} disabled={loading || !stats} />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Bem-vindo ao bela360. Aqui está o resumo do seu dia."
+        actions={<ExportButton onExport={handleExportDashboard} disabled={loading || !stats} />}
+      />
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

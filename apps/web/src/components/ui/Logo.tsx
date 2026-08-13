@@ -4,20 +4,19 @@ import { cn } from '@/lib/utils';
 interface LogoProps {
   className?: string;
   mark?: boolean;
-  wordmarkClassName?: string;
 }
 
-// Source badge is 846x800px (trimmed, transparent) — kept at native ratio so
+// Source badge is 316x144px (trimmed, transparent) — kept at native ratio so
 // it never looks squished at any display height.
-const MARK_RATIO = 846 / 800;
+const MARK_RATIO = 316 / 144;
 
 export function LogoMark({ className }: { className?: string }) {
   return (
     <Image
       src="/images/logobela360.png"
       alt="Bela 360°"
-      width={846}
-      height={800}
+      width={316}
+      height={144}
       priority
       className={cn('h-12 w-auto', className)}
       style={{ aspectRatio: MARK_RATIO }}

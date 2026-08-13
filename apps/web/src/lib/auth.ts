@@ -5,6 +5,8 @@ export interface CurrentUser {
   name: string;
   phone: string;
   email: string | null;
+  avatarUrl?: string | null;
+  hasPassword?: boolean;
   role: string;
   isSuperAdmin: boolean;
   business: {

@@ -28,6 +28,11 @@ const createCampaignSchema = z.object({
     services: z.array(z.string()).optional(),
     professionals: z.array(z.string()).optional(),
   }).optional(),
+  // Quando enviado, restringe os destinatarios a esses clientes especificos
+  // (ja filtrados pelo segmento na tela) em vez do segmento inteiro -
+  // e o que permite o dono escolher aniversariante por aniversariante /
+  // inativo por inativo em vez de mandar pra todo mundo do segmento de uma vez.
+  clientIds: z.array(z.string().cuid()).optional(),
 });
 
 const clientRatingSchema = z.object({
@@ -46,7 +51,14 @@ export class MarketingService {
     const validated = createCampaignSchema.parse(data);
 
     // Get target clients based on segment
-    const targetClients = await this.getSegmentClients(businessId, validated.segmentType, validated.customFilter);
+    let targetClients = await this.getSegmentClients(businessId, validated.segmentType, validated.customFilter);
+
+    // Se o dono selecionou clientes especificos na tela (ex: 3 dos 8
+    // aniversariantes), restringe aos que ele realmente escolheu.
+    if (validated.clientIds) {
+      const selected = new Set(validated.clientIds);
+      targetClients = targetClients.filter(c => selected.has(c.id));
+    }
 
     const campaign = await prisma.campaign.create({
       data: {
@@ -85,7 +97,9 @@ export class MarketingService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    const where: any = { businessId };
+    // optOut = cliente pediu pra nao receber campanhas (LGPD) - nunca entra
+    // em nenhum segmento, mesmo que bata com o filtro.
+    const where: any = { businessId, optOut: false };
 
     switch (segment) {
       case ClientSegmentType.ALL:
@@ -142,7 +156,15 @@ export class MarketingService {
 
     let clients = await prisma.client.findMany({
       where,
-      select: { id: true, name: true, phone: true, birthDate: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        birthDate: true,
+        lastVisitAt: true,
+        totalAppointments: true,
+        totalSpent: true,
+      },
     });
 
     // Filter birthday month in code

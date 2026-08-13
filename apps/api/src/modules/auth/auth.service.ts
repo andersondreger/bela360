@@ -1,10 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { prisma, redis, logger, env } from '../../config';
-import { getSystemWhatsAppService } from '../whatsapp/whatsapp.service';
 import { telegramClient } from '../telegram/telegram.client';
 import { AppError } from '../../common/errors';
-import { verifyPassword } from '../../common/password';
+import { verifyPassword, hashPassword } from '../../common/password';
 
 interface TokenPayload {
   userId: string;
@@ -52,33 +51,31 @@ export class AuthService {
   }
 
   /**
-   * Envia uma mensagem de WhatsApp pela instancia de sistema, sem derrubar
-   * o fluxo chamador se a instancia estiver desconectada (mesmo
-   * comportamento tolerante que requestOTP ja tinha).
+   * Manda a mensagem pelo Telegram se o usuario ja tiver vinculado um chat
+   * (ver linkTelegram). A instancia de sistema do WhatsApp saiu do Evolution
+   * e o lancamento atual e Telegram-only - se ainda nao houver chat
+   * vinculado, o codigo fica so no Redis/banco ate o usuario vincular
+   * (fluxo de /telegram/link na tela de login ou onboarding).
    */
-  private async sendSystemWhatsapp(phone: string, text: string): Promise<void> {
-    try {
-      const systemWhatsApp = getSystemWhatsAppService();
-      await systemWhatsApp.sendText({ number: phone, text });
-      logger.info({ phone }, 'Mensagem enviada via WhatsApp de sistema');
-    } catch (error) {
-      logger.error({ error, phone }, 'Falha ao enviar WhatsApp via instancia de sistema');
-      // Segue o fluxo mesmo assim - o OTP fica no Redis/banco pra verificacao manual.
-    }
+  private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
+    if (!user.telegramChatId) return;
+    await telegramClient.sendMessage(user.telegramChatId, text);
   }
 
   /**
-   * Manda a mesma mensagem por todo canal que o usuario tiver disponivel:
-   * sempre tenta WhatsApp (instancia de sistema), e tambem Telegram se o
-   * usuario ja vinculou um chat (ver linkTelegram). Nenhum dos dois derruba
-   * o fluxo chamador se falhar - o OTP sempre fica no Redis/banco como
-   * ultimo recurso.
+   * Reenvia o OTP pendente do usuario (se ainda valido) pro chat do Telegram
+   * recem vinculado - compartilhado entre o cadastro direto no bot
+   * (telegram-signup.service.ts, chatId ja conhecido) e o vinculo por token
+   * (linkTelegram, gerado pela tela de login/onboarding).
    */
-  private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
-    await Promise.all([
-      this.sendSystemWhatsapp(user.phone, text),
-      user.telegramChatId ? telegramClient.sendMessage(user.telegramChatId, text) : Promise.resolve(),
-    ]);
+  private async relayPendingOtp(userId: string, chatId: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user?.otpCode && user.otpExpiresAt && user.otpExpiresAt > new Date()) {
+      await telegramClient.sendMessage(
+        chatId,
+        `🔐 Seu código de acesso bela360:\n\n*${user.otpCode}*\n\nVálido por alguns minutos.`
+      );
+    }
   }
 
   /**
@@ -113,6 +110,7 @@ export class AuthService {
 
     await prisma.user.update({ where: { id: user.id }, data: { telegramChatId: chatId } });
     await redis.del(`telegram:link:${token}`);
+    await this.relayPendingOtp(user.id, chatId);
 
     logger.info({ userId: user.id }, 'Conta vinculada ao Telegram');
     return { linked: true, userName: user.name };
@@ -127,14 +125,8 @@ export class AuthService {
    * cadastro.
    */
   async relayCurrentOtpToTelegram(userId: string, chatId: string): Promise<void> {
-    const user = await prisma.user.update({ where: { id: userId }, data: { telegramChatId: chatId } });
-
-    if (user.otpCode && user.otpExpiresAt && user.otpExpiresAt > new Date()) {
-      await telegramClient.sendMessage(
-        chatId,
-        `🔐 Seu código de acesso bela360:\n\n*${user.otpCode}*\n\nVálido por alguns minutos.`
-      );
-    }
+    await prisma.user.update({ where: { id: userId }, data: { telegramChatId: chatId } });
+    await this.relayPendingOtp(userId, chatId);
   }
 
   /**
@@ -191,7 +183,7 @@ export class AuthService {
 
     await this.notifyUser(
       { id: userId, phone: normalizedPhone, telegramChatId: null },
-      `🎉 Bem-vindo(a) ao bela360, ${businessName}!\n\nSeu código de acesso:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos. Use esse número de WhatsApp pra entrar na sua conta em bela360.wayia.com.br/login.`
+      `🎉 Bem-vindo(a) ao bela360, ${businessName}!\n\nSeu código de acesso:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos. Use esse número de telefone pra entrar na sua conta em bela360.wayia.com.br/login.`
     );
   }
 
@@ -316,6 +308,47 @@ export class AuthService {
     logger.info({ userId: user.id }, 'User logged in successfully via password');
 
     return tokens;
+  }
+
+  /**
+   * Atualiza os dados basicos do proprio usuario logado (nome/email/avatar).
+   * Telefone nao entra aqui de proposito: e a chave de login (OTP/senha) e de
+   * unicidade por negocio, trocar exige um fluxo proprio de verificacao.
+   */
+  async updateProfile(
+    userId: string,
+    data: { name?: string; email?: string | null; avatarUrl?: string | null }
+  ) {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    logger.info({ userId }, 'Perfil atualizado');
+    return user;
+  }
+
+  /**
+   * Define/troca a senha do usuario logado. Se ja existir uma senha, exige a
+   * atual pra trocar (evita que uma sessao roubada troque a senha sem saber a
+   * antiga). Se ainda nao existir (conta so com OTP), define direto.
+   */
+  async setPassword(userId: string, currentPassword: string | undefined, newPassword: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new AppError('Usuário não encontrado', 404);
+    }
+
+    if (user.passwordHash) {
+      if (!currentPassword || !verifyPassword(currentPassword, user.passwordHash)) {
+        throw new AppError('Senha atual incorreta', 401);
+      }
+    }
+
+    const passwordHash = hashPassword(newPassword);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+    logger.info({ userId }, 'Senha atualizada pelo usuário');
   }
 
   /**

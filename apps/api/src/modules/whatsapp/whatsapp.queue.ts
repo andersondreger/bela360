@@ -14,6 +14,7 @@ import {
   getAvailableDates,
   createAppointment,
 } from './availability.service';
+import { matchFreeTextOption } from './booking-nlu.service';
 
 interface ProcessMessageJob {
   businessId: string;
@@ -390,22 +391,103 @@ async function handleConversationFlow(
     };
   }
 
-  // Based on current step, guide user
+  // Based on current step, guide user - tenta primeiro entender o texto livre
+  // (o WhatsApp so mostra 3 botoes por vez, e o cliente pode digitar em vez
+  // de tocar); se a IA nao tiver certeza, cai no mesmo menu de sempre.
   switch (state.step) {
-    case 'selecting_service':
+    case 'selecting_service': {
+      const services = business.services.slice(0, 10);
+      const matchedId = await matchFreeTextOption(
+        'qual serviço o cliente quer agendar',
+        text,
+        services.map((s: any) => ({
+          id: s.id,
+          label: `${s.name} - R$ ${parseFloat(s.price).toFixed(2)} (${s.duration}min)`,
+        }))
+      );
+      if (matchedId) {
+        const service = services.find((s: any) => s.id === matchedId);
+        await setConversationState(businessId, clientPhone, 'selecting_professional', {
+          serviceId: matchedId,
+          serviceName: service.name,
+        });
+        return generateProfessionalSelection(business, client, matchedId);
+      }
       return generateServiceSelection(business, client);
+    }
 
-    case 'selecting_professional':
+    case 'selecting_professional': {
+      const serviceProfessionals = await prisma.serviceProfessional.findMany({
+        where: { serviceId: state.data.serviceId },
+        include: { professional: true },
+      });
+      const professionals =
+        serviceProfessionals.length > 0 ? serviceProfessionals.map(sp => sp.professional) : business.users;
+
+      const matchedId = await matchFreeTextOption(
+        'qual profissional o cliente prefere',
+        text,
+        professionals.map((p: any) => ({ id: p.id, label: p.name }))
+      );
+      if (matchedId) {
+        const professional = professionals.find((p: any) => p.id === matchedId);
+        await setConversationState(businessId, clientPhone, 'selecting_date', {
+          professionalId: matchedId,
+          professionalName: professional.name,
+        });
+        return generateDateSelection(business, client, state.data, matchedId);
+      }
       return generateProfessionalSelection(business, client, state.data.serviceId!);
+    }
 
-    case 'selecting_date':
+    case 'selecting_date': {
+      if (!state.data.serviceId || !state.data.professionalId) {
+        return generateDateSelection(business, client, state.data, state.data.professionalId!);
+      }
+      const availableDates = await getAvailableDates(businessId, state.data.professionalId, state.data.serviceId, 14);
+      const matchedId = await matchFreeTextOption(
+        'qual dia o cliente quer agendar',
+        text,
+        availableDates.map(d => ({ id: d.date, label: d.label }))
+      );
+      if (matchedId) {
+        await setConversationState(businessId, clientPhone, 'selecting_time', { date: matchedId });
+        return generateTimeSelection(business, client, state.data, matchedId);
+      }
       return generateDateSelection(business, client, state.data, state.data.professionalId!);
+    }
 
-    case 'selecting_time':
+    case 'selecting_time': {
+      if (!state.data.serviceId || !state.data.professionalId || !state.data.date) {
+        return generateTimeSelection(business, client, state.data, state.data.date!);
+      }
+      const slots = await getAvailableSlots(businessId, state.data.professionalId, state.data.serviceId, state.data.date);
+      const matchedId = await matchFreeTextOption(
+        'qual horário o cliente prefere',
+        text,
+        slots.map(s => ({ id: s.time, label: s.label }))
+      );
+      if (matchedId) {
+        await setConversationState(businessId, clientPhone, 'confirming_booking', { time: matchedId });
+        return generateBookingConfirmation(business, client, state.data, matchedId);
+      }
       return generateTimeSelection(business, client, state.data, state.data.date!);
+    }
 
-    case 'confirming_booking':
+    case 'confirming_booking': {
+      const normalized = text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      const isAffirmative = /\b(sim|confirmo|confirmar|pode ser|isso|beleza|ok|blz|fechado|fechou|show)\b/.test(
+        normalized
+      );
+      const isNegative = /\b(nao|cancelar|mudar|deixa)\b/.test(normalized);
+      if (isAffirmative && !isNegative) {
+        return handleCompleteBooking(business, client, state.data);
+      }
       return generateBookingConfirmation(business, client, state.data, state.data.time!);
+    }
 
     default:
       await clearConversationState(businessId, clientPhone);

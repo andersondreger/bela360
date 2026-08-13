@@ -153,7 +153,19 @@ export class AppointmentsService {
       prisma.appointment.findMany({
         where,
         include: {
-          client: { select: { id: true, name: true, phone: true } },
+          client: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              birthDate: true,
+              notes: true,
+              totalAppointments: true,
+              totalSpent: true,
+              lastVisitAt: true,
+            },
+          },
           professional: { select: { id: true, name: true, color: true } },
           service: { select: { id: true, name: true, duration: true, price: true } },
         },

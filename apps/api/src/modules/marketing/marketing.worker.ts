@@ -122,7 +122,7 @@ const messageWorker = new Worker<CampaignMessageJob>(
       const recipient = await prisma.campaignRecipient.findUnique({
         where: { id: recipientId },
         include: {
-          client: { select: { id: true, name: true, phone: true } },
+          client: { select: { id: true, name: true, phone: true, optOut: true } },
           campaign: { select: { id: true, message: true, status: true } },
         },
       });
@@ -130,6 +130,15 @@ const messageWorker = new Worker<CampaignMessageJob>(
       if (!recipient) {
         logger.warn({ recipientId }, 'Campaign recipient not found');
         return { success: false, reason: 'Recipient not found' };
+      }
+
+      // Segunda checagem no momento do envio: o cliente pode ter pedido opt-out
+      // depois que a campanha foi criada (a lista de destinatarios e um
+      // snapshot tirado na criacao, nao e recalculada).
+      if (recipient.client.optOut) {
+        await marketingService.updateRecipientStatus(recipientId, false, 'Cliente optou por não receber mensagens');
+        logger.info({ recipientId, clientId: recipient.clientId }, 'Skipped: client opted out');
+        return { success: false, reason: 'Client opted out' };
       }
 
       // Check if already sent

@@ -92,6 +92,10 @@ COPY --from=builder --chown=expressjs:nodejs /app/packages/shared/package.json .
 COPY --from=builder --chown=expressjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=expressjs:nodejs /app/package.json ./
 
+# Diretorio de uploads (logo do negocio, avatar) - criado com dono certo pra
+# quando o volume nomeado api_uploads for montado por cima, herdar a permissao.
+RUN mkdir -p apps/api/uploads && chown expressjs:nodejs apps/api/uploads
+
 USER expressjs
 
 EXPOSE 3001

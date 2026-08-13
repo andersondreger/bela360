@@ -26,5 +26,7 @@ router.post('/refresh', (req, res, next) => authController.refreshToken(req, res
 // Protected routes
 router.post('/logout', authMiddleware, (req, res, next) => authController.logout(req, res, next));
 router.get('/me', authMiddleware, (req, res, next) => authController.me(req, res, next));
+router.patch('/me', authMiddleware, (req, res, next) => authController.updateMe(req, res, next));
+router.post('/password', authAttemptLimiter, authMiddleware, (req, res, next) => authController.setPassword(req, res, next));
 
 export { router as authRoutes };

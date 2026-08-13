@@ -18,6 +18,7 @@ interface UpdateClientDTO {
   birthDate?: Date;
   notes?: string;
   preferredProfessionalId?: string;
+  optOut?: boolean;
 }
 
 interface ClientFilters {
@@ -198,6 +199,7 @@ export class ClientsService {
         ...(data.preferredProfessionalId !== undefined && {
           preferredProfessionalId: data.preferredProfessionalId,
         }),
+        ...(data.optOut !== undefined && { optOut: data.optOut }),
       },
     });
 

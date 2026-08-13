@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Trophy,
   Target,
@@ -12,16 +12,21 @@ import {
   Calendar,
   Medal,
   Share2,
-  Instagram,
+  Pencil,
   AlertCircle,
+  Camera,
+  Loader2,
 } from 'lucide-react';
-import { Button, Card, CardContent, Badge as UiBadge, PageHeader } from '@/components/ui';
+import { Button, Card, CardContent, Badge as UiBadge, PageHeader, Modal, Input } from '@/components/ui';
 import {
   professionalApi,
   isPremiumLockedError,
+  authApi,
+  uploadImage,
   type ProfessionalDashboard,
   type ProfessionalBadge,
 } from '@/lib/api';
+import { fetchCurrentUser, type CurrentUser } from '@/lib/auth';
 
 export default function PerfilPage() {
   const [dashboard, setDashboard] = useState<ProfessionalDashboard | null>(null);
@@ -34,6 +39,112 @@ export default function PerfilPage() {
   const [sharing, setSharing] = useState(false);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
+
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+
+  useEffect(() => {
+    fetchCurrentUser().then(setCurrentUser);
+  }, []);
+
+  const openEditProfile = () => {
+    setEditName(currentUser?.name || '');
+    setEditEmail(currentUser?.email || '');
+    setEditAvatarUrl(currentUser?.avatarUrl || null);
+    setProfileError(null);
+    setProfileSaved(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+    setPasswordSaved(false);
+    setShowEditProfile(true);
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    setProfileError(null);
+    try {
+      const { url } = await uploadImage(file);
+      setEditAvatarUrl(url);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Erro ao enviar imagem');
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileError(null);
+    setProfileSaved(false);
+    try {
+      await authApi.updateMe({
+        name: editName.trim(),
+        email: editEmail.trim() || null,
+        avatarUrl: editAvatarUrl,
+      });
+      const refreshed = await fetchCurrentUser();
+      setCurrentUser(refreshed);
+      setProfileSaved(true);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Erro ao salvar perfil');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSaved(false);
+
+    if (newPassword.length < 6) {
+      setPasswordError('A nova senha precisa ter pelo menos 6 caracteres');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('A confirmação não bate com a nova senha');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      await authApi.setPassword({
+        currentPassword: currentUser?.hasPassword ? currentPassword : undefined,
+        newPassword,
+      });
+      setPasswordSaved(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      const refreshed = await fetchCurrentUser();
+      setCurrentUser(refreshed);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Erro ao trocar senha');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -157,8 +268,8 @@ export default function PerfilPage() {
               <Share2 className="h-4 w-4" />
               Compartilhar Perfil
             </Button>
-            <Button variant="primary">
-              <Instagram className="h-4 w-4" />
+            <Button variant="primary" onClick={openEditProfile}>
+              <Pencil className="h-4 w-4" />
               Editar Perfil
             </Button>
           </>
@@ -371,6 +482,141 @@ export default function PerfilPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Modal
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        title="Editar Perfil"
+        description="Atualize seus dados, foto e senha de acesso"
+      >
+        <div className="space-y-8">
+          {/* Dados basicos + avatar */}
+          <form onSubmit={handleSaveProfile} className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-gradient-brand text-lg font-semibold text-white">
+                  {editAvatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={editAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    (editName || currentUser?.name || '?')
+                      .split(' ')
+                      .slice(0, 2)
+                      .map((p) => p[0])
+                      .join('')
+                      .toUpperCase()
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card shadow-sm hover:bg-muted"
+                  title="Trocar foto"
+                >
+                  {uploadingAvatar ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Camera className="h-3 w-3" />
+                  )}
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                JPG, PNG ou WEBP, até 5MB.
+              </div>
+            </div>
+
+            <Input
+              label="Nome"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              required
+              minLength={2}
+            />
+            <Input
+              label="E-mail"
+              type="email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              placeholder="seuemail@exemplo.com"
+            />
+            <p className="text-xs text-muted-foreground">
+              Telefone: {currentUser?.phone} (é a chave de login, trocar exige suporte)
+            </p>
+
+            {profileError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+                {profileError}
+              </div>
+            )}
+            {profileSaved && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                Perfil atualizado!
+              </div>
+            )}
+
+            <Button type="submit" loading={savingProfile} className="w-full">
+              Salvar dados
+            </Button>
+          </form>
+
+          <div className="border-t border-border pt-6">
+            <h3 className="mb-3 text-sm font-semibold">Trocar senha</h3>
+            <form onSubmit={handleSavePassword} className="space-y-4">
+              {currentUser?.hasPassword && (
+                <Input
+                  label="Senha atual"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                />
+              )}
+              <Input
+                label="Nova senha"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={6}
+                required
+              />
+              <Input
+                label="Confirmar nova senha"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={6}
+                required
+              />
+
+              {passwordError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+                  {passwordError}
+                </div>
+              )}
+              {passwordSaved && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  Senha atualizada!
+                </div>
+              )}
+
+              <Button type="submit" variant="outline" loading={savingPassword} className="w-full">
+                {currentUser?.hasPassword ? 'Trocar senha' : 'Definir senha'}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Você também pode sempre entrar recebendo um código de acesso pelo WhatsApp/Telegram, sem precisar de senha.
+              </p>
+            </form>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

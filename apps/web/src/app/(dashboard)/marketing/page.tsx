@@ -10,6 +10,7 @@ import {
   Clock,
   Gift,
   TrendingUp,
+  BellOff,
 } from 'lucide-react';
 import {
   PageHeader,
@@ -20,7 +21,7 @@ import {
   Select,
   Textarea,
 } from '@/components/ui';
-import { marketingApi, isPremiumLockedError } from '@/lib/api';
+import { marketingApi, clientsApi, isPremiumLockedError, type SegmentClient } from '@/lib/api';
 
 interface Campaign {
   id: string;
@@ -82,6 +83,11 @@ export default function MarketingPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  const [segmentClients, setSegmentClients] = useState<SegmentClient[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [optingOutId, setOptingOutId] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -116,6 +122,75 @@ export default function MarketingPage() {
   const handleCloseModal = () => {
     setShowNewCampaign(false);
     setFormData({ name: '', message: '', segmentType: 'ALL', scheduledDate: '' });
+    setSegmentClients([]);
+    setSelectedClientIds(new Set());
+  };
+
+  const openCampaignModal = (segmentType?: string) => {
+    setFormData(prev => ({ ...prev, segmentType: segmentType || prev.segmentType }));
+    setShowNewCampaign(true);
+  };
+
+  const loadSegmentClients = useCallback(async (segmentType: string) => {
+    setLoadingClients(true);
+    try {
+      const clients = await marketingApi.getSegmentClients(segmentType.toLowerCase());
+      setSegmentClients(clients);
+      // Todos comecam marcados - o dono desmarca quem nao quer que receba,
+      // em vez de ter que marcar um por um.
+      setSelectedClientIds(new Set(clients.map(c => c.id)));
+    } catch {
+      setSegmentClients([]);
+      setSelectedClientIds(new Set());
+    } finally {
+      setLoadingClients(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showNewCampaign) {
+      loadSegmentClients(formData.segmentType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNewCampaign, formData.segmentType]);
+
+  const toggleClient = (clientId: string) => {
+    setSelectedClientIds(prev => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  };
+
+  const handleOptOut = async (client: SegmentClient) => {
+    if (!confirm(`Marcar ${client.name} para não receber mais campanhas de marketing?`)) return;
+    setOptingOutId(client.id);
+    try {
+      await clientsApi.update(client.id, { optOut: true });
+      setSegmentClients(prev => prev.filter(c => c.id !== client.id));
+      setSelectedClientIds(prev => {
+        const next = new Set(prev);
+        next.delete(client.id);
+        return next;
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao atualizar cliente');
+    } finally {
+      setOptingOutId(null);
+    }
+  };
+
+  const formatLastVisit = (client: SegmentClient) => {
+    if (!client.lastVisitAt) return 'Nunca veio';
+    const days = Math.floor((Date.now() - new Date(client.lastVisitAt).getTime()) / (1000 * 60 * 60 * 24));
+    return `Última visita há ${days} dia${days === 1 ? '' : 's'}`;
+  };
+
+  const formatBirthday = (client: SegmentClient) => {
+    if (!client.birthDate) return null;
+    const d = new Date(client.birthDate);
+    return `Aniversário: ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
   };
 
   const getRecipientCount = (segmentType: string): number => {
@@ -138,12 +213,21 @@ export default function MarketingPage() {
       return;
     }
 
+    if (segmentClients.length > 0 && selectedClientIds.size === 0) {
+      alert('Selecione ao menos um cliente pra receber a campanha');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
         name: formData.name,
         message: formData.message,
         segmentType: formData.segmentType,
+        // Restringe aos clientes que ficaram marcados na lista (o dono pode
+        // ter desmarcado alguns aniversariantes/inativos) em vez de mandar
+        // pro segmento inteiro sempre.
+        clientIds: Array.from(selectedClientIds),
       };
       if (formData.scheduledDate) {
         payload.scheduledFor = new Date(formData.scheduledDate).toISOString();
@@ -202,7 +286,7 @@ export default function MarketingPage() {
         title="Marketing"
         description="Campanhas, segmentação de clientes e avaliações"
         actions={
-          <Button onClick={() => setShowNewCampaign(true)}>
+          <Button onClick={() => openCampaignModal()}>
             <Plus className="h-4 w-4" />
             Nova Campanha
           </Button>
@@ -245,16 +329,18 @@ export default function MarketingPage() {
                          (key === 'BIRTHDAY_MONTH' ? segments?.birthdayMonth : 0);
 
             return (
-              <div
+              <button
                 key={key}
-                className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm transition-shadow hover:shadow-md"
+                type="button"
+                onClick={() => openCampaignModal(key)}
+                className="rounded-2xl border border-border bg-card p-4 text-center shadow-sm transition-shadow hover:shadow-md hover:border-primary/50"
               >
                 <div className={`inline-flex p-3 rounded-xl ${info.color} mb-2`}>
                   <Icon className="h-5 w-5" />
                 </div>
                 <p className="text-2xl font-bold">{count}</p>
                 <p className="text-sm text-muted-foreground">{info.name}</p>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -380,10 +466,75 @@ export default function MarketingPage() {
               Deixe vazio para enviar imediatamente
             </p>
           </div>
+
+          {/* Selecao individual dos clientes do segmento - desmarque quem
+              nao deve receber a mensagem desta vez */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-sm font-medium">
+                Clientes deste segmento ({selectedClientIds.size} de {segmentClients.length} selecionados)
+              </label>
+              {segmentClients.length > 0 && (
+                <div className="flex gap-2 text-xs">
+                  <button
+                    type="button"
+                    className="text-primary hover:underline"
+                    onClick={() => setSelectedClientIds(new Set(segmentClients.map(c => c.id)))}
+                  >
+                    Selecionar todos
+                  </button>
+                  <span className="text-muted-foreground">·</span>
+                  <button
+                    type="button"
+                    className="text-primary hover:underline"
+                    onClick={() => setSelectedClientIds(new Set())}
+                  >
+                    Limpar
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-border divide-y divide-border">
+              {loadingClients && (
+                <p className="p-4 text-sm text-muted-foreground">Carregando clientes...</p>
+              )}
+              {!loadingClients && segmentClients.length === 0 && (
+                <p className="p-4 text-sm text-muted-foreground">Nenhum cliente neste segmento no momento.</p>
+              )}
+              {!loadingClients && segmentClients.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 p-3 hover:bg-muted/40">
+                  <input
+                    type="checkbox"
+                    checked={selectedClientIds.has(c.id)}
+                    onChange={() => toggleClient(c.id)}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{c.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {c.phone}
+                      {formData.segmentType === 'BIRTHDAY_MONTH' && formatBirthday(c) && ` · ${formatBirthday(c)}`}
+                      {formData.segmentType === 'INACTIVE' && ` · ${formatLastVisit(c)}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    title="Não incomodar - remover de campanhas futuras"
+                    onClick={() => handleOptOut(c)}
+                    disabled={optingOutId === c.id}
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                  >
+                    <BellOff className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="p-4 bg-muted/50 rounded-xl">
             <p className="text-sm font-medium">Resumo da campanha:</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Sera enviada para <span className="font-bold">{getRecipientCount(formData.segmentType)}</span> clientes
+              Sera enviada para <span className="font-bold">{selectedClientIds.size}</span> cliente(s)
               do segmento <span className="font-bold">{segmentInfo[formData.segmentType as keyof typeof segmentInfo]?.name}</span>
             </p>
           </div>
