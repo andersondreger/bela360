@@ -21,7 +21,8 @@ import {
   Select,
   Textarea,
 } from '@/components/ui';
-import { marketingApi, clientsApi, isPremiumLockedError, type SegmentClient } from '@/lib/api';
+import { marketingApi, clientsApi, businessApi, isPremiumLockedError, type SegmentClient, type Business } from '@/lib/api';
+import { AdEditor } from '@/components/AdEditor';
 
 interface Campaign {
   id: string;
@@ -68,6 +69,8 @@ const statusLabels: Record<
 };
 
 export default function MarketingPage() {
+  const [mainTab, setMainTab] = useState<'campanhas' | 'criar'>('campanhas');
+  const [business, setBusiness] = useState<Business | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [segments, setSegments] = useState<SegmentOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +121,10 @@ export default function MarketingPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    businessApi.getCurrent().then(setBusiness).catch(() => {});
+  }, []);
 
   const handleCloseModal = () => {
     setShowNewCampaign(false);
@@ -284,21 +291,50 @@ export default function MarketingPage() {
     <div className="space-y-6">
       <PageHeader
         title="Marketing"
-        description="Campanhas, segmentação de clientes e avaliações"
+        description="Campanhas, segmentação de clientes, avaliações e criação de publicidade"
         actions={
-          <Button onClick={() => openCampaignModal()}>
-            <Plus className="h-4 w-4" />
-            Nova Campanha
-          </Button>
+          mainTab === 'campanhas' ? (
+            <Button onClick={() => openCampaignModal()}>
+              <Plus className="h-4 w-4" />
+              Nova Campanha
+            </Button>
+          ) : undefined
         }
       />
 
-      {error && (
+      <div className="border-b border-border">
+        <nav className="flex gap-6">
+          {[
+            { id: 'campanhas' as const, label: 'Campanhas' },
+            { id: 'criar' as const, label: 'Criar Publicidade' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMainTab(tab.id)}
+              className={`pb-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                mainTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {mainTab === 'criar' && (
+        <AdEditor businessName={business?.name || ''} primaryColor={business?.settings?.branding?.primaryColor} />
+      )}
+
+      {mainTab === 'campanhas' && error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
           {error}
         </div>
       )}
 
+      {mainTab === 'campanhas' && (
+      <>
       {/* Rating Stats */}
       <div className="noise-overlay rounded-2xl bg-gradient-to-r from-bela-gold via-amber-500 to-orange-500 p-6 text-white shadow-glow">
         <div className="flex items-center justify-between">
@@ -419,6 +455,8 @@ export default function MarketingPage() {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* New Campaign Modal */}
       <Modal open={showNewCampaign} onClose={handleCloseModal} title="Nova Campanha">

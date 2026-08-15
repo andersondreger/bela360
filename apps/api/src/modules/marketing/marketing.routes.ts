@@ -41,4 +41,10 @@ router.delete('/templates/:id', (req, res, next) => marketingController.deleteTe
 router.post('/templates/:id/duplicate', (req, res, next) => marketingController.duplicateTemplate(req, res, next));
 router.post('/templates/:id/fill', (req, res, next) => marketingController.fillTemplate(req, res, next));
 
+// Ad creations (editor de publicidade)
+router.get('/creations', (req, res, next) => marketingController.getCreations(req, res, next));
+router.post('/creations', (req, res, next) => marketingController.createCreation(req, res, next));
+router.put('/creations/:id', (req, res, next) => marketingController.updateCreation(req, res, next));
+router.delete('/creations/:id', (req, res, next) => marketingController.deleteCreation(req, res, next));
+
 export { router as marketingRoutes };

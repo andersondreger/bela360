@@ -7,7 +7,7 @@ import { AuthorizationError } from '../../common/errors';
 const createCouponSchema = z.object({
   modules: z.array(z.nativeEnum(PlatformModule)).min(1),
   durationDays: z.number().int().positive().max(3650),
-  targetBusinessId: z.string().cuid().optional(),
+  targetBusinessId: z.string().min(1).optional(),
 });
 
 const redeemCouponSchema = z.object({

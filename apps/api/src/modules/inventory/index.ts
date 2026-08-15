@@ -29,7 +29,7 @@ const stockMovementSchema = z.object({
   quantity: z.number().positive(),
   unitCost: z.number().nonnegative().optional(),
   notes: z.string().optional(),
-  appointmentId: z.string().cuid().optional(),
+  appointmentId: z.string().min(1).optional(),
 });
 
 const linkServiceSchema = z.object({

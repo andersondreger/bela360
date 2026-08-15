@@ -3,11 +3,12 @@ import { Prisma, CommissionPayoutStatus } from '@prisma/client';
 import { prisma, logger } from '../../config';
 import { AppError } from '../../common/errors';
 import { PaymentMethod, PaymentStatus } from '@prisma/client';
+import { awardPointsForPayment } from '../loyalty/loyalty.service';
 
 // Commission payout schemas
 const createPayoutSchema = z.object({
-  professionalId: z.string().cuid(),
-  paymentIds: z.array(z.string().cuid()).min(1),
+  professionalId: z.string().min(1),
+  paymentIds: z.array(z.string().min(1)).min(1),
   paymentMethod: z.string().optional(),
   reference: z.string().optional(),
   notes: z.string().optional(),
@@ -22,7 +23,7 @@ const markPayoutPaidSchema = z.object({
 // Validation schemas
 const createPaymentSchema = z
   .object({
-    appointmentId: z.string().cuid(),
+    appointmentId: z.string().min(1),
     amount: z.number().positive(),
     discount: z.number().min(0).optional(),
     method: z.nativeEnum(PaymentMethod),
@@ -35,8 +36,8 @@ const createPaymentSchema = z
   });
 
 const commissionConfigSchema = z.object({
-  professionalId: z.string().cuid(),
-  serviceId: z.string().cuid().optional(),
+  professionalId: z.string().min(1),
+  serviceId: z.string().min(1).optional(),
   rate: z.number().min(0).max(100),
   fixedAmount: z.number().positive().optional(),
 });
@@ -125,6 +126,11 @@ export class FinanceService {
 
     // Update or create cash register for today
     await this.updateCashRegister(businessId, payment);
+
+    // Fidelidade: concede pontos e avisa o cliente pelo WhatsApp (não bloqueia o pagamento se falhar)
+    awardPointsForPayment(businessId, appointment.clientId, finalAmount, validated.appointmentId).catch((err) =>
+      logger.error({ err, paymentId: payment.id }, 'Failed to award loyalty points')
+    );
 
     logger.info({ paymentId: payment.id, appointmentId: validated.appointmentId }, 'Payment registered');
     return payment;

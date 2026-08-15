@@ -3,16 +3,16 @@ import { z } from 'zod';
 import { appointmentsService } from './appointments.service';
 
 const createAppointmentSchema = z.object({
-  clientId: z.string().cuid(),
-  professionalId: z.string().cuid(),
-  serviceId: z.string().cuid(),
+  clientId: z.string().min(1),
+  professionalId: z.string().min(1),
+  serviceId: z.string().min(1),
   startTime: z.string().datetime().transform(val => new Date(val)),
   notes: z.string().max(500).optional(),
 });
 
 const updateAppointmentSchema = z.object({
-  professionalId: z.string().cuid().optional(),
-  serviceId: z.string().cuid().optional(),
+  professionalId: z.string().min(1).optional(),
+  serviceId: z.string().min(1).optional(),
   startTime: z.string().datetime().transform(val => new Date(val)).optional(),
   notes: z.string().max(500).optional(),
   status: z.enum(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW']).optional(),
@@ -21,17 +21,17 @@ const updateAppointmentSchema = z.object({
 const filtersSchema = z.object({
   startDate: z.string().datetime().optional().transform(val => val ? new Date(val) : undefined),
   endDate: z.string().datetime().optional().transform(val => val ? new Date(val) : undefined),
-  professionalId: z.string().cuid().optional(),
+  professionalId: z.string().min(1).optional(),
   status: z.enum(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'NO_SHOW']).optional(),
-  clientId: z.string().cuid().optional(),
+  clientId: z.string().min(1).optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(50),
 });
 
 const availabilitySchema = z.object({
-  professionalId: z.string().cuid(),
+  professionalId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).transform(val => new Date(val)),
-  serviceId: z.string().cuid(),
+  serviceId: z.string().min(1),
 });
 
 export class AppointmentsController {

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { prisma } from '../../config';
+import { prisma, logger } from '../../config';
+import { notifyRedemption } from './loyalty.service';
 
 const router: Router = Router();
 
@@ -21,7 +22,7 @@ const loyaltyProgramSchema = z.object({
 
 const addPointsSchema = z.object({
   amount: z.number().positive(),
-  appointmentId: z.string().cuid().optional(),
+  appointmentId: z.string().min(1).optional(),
   description: z.string().optional(),
 });
 
@@ -32,8 +33,8 @@ const createRewardSchema = z.object({
   type: z.enum(['DISCOUNT_PERCENT', 'DISCOUNT_FIXED', 'FREE_SERVICE', 'FREE_PRODUCT', 'CASHBACK']),
   discountPercent: z.number().min(0).max(100).optional(),
   discountAmount: z.number().nonnegative().optional(),
-  serviceId: z.string().cuid().optional(),
-  productId: z.string().cuid().optional(),
+  serviceId: z.string().min(1).optional(),
+  productId: z.string().min(1).optional(),
   validityDays: z.number().int().positive().optional(),
   maxRedemptions: z.number().int().positive().optional(),
 });
@@ -354,6 +355,10 @@ router.post('/clients/:clientId/redeem/:rewardId', async (req: Request, res: Res
         data: { totalRedemptions: { increment: 1 } },
       }),
     ]);
+
+    notifyRedemption(businessId, clientId, reward.name, couponCode, expiresAt).catch((err) =>
+      logger.error({ err, clientId, rewardId }, 'Failed to notify loyalty redemption')
+    );
 
     res.json({ success: true, data: { couponCode, expiresAt, reward } });
   } catch (error) {

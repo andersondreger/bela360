@@ -3,6 +3,7 @@ import { AppointmentStatus } from '@prisma/client';
 import { AppError } from '../../common/errors';
 import { reminderQueue, sendQueue } from '../whatsapp/whatsapp.queue';
 import { clientsService } from '../clients/clients.service';
+import { automationService } from '../automation/automation.service';
 
 interface CreateAppointmentDTO {
   businessId: string;
@@ -375,9 +376,67 @@ export class AppointmentsService {
     // Update client stats
     await clientsService.updateStats(appointment.clientId);
 
+    // Deduct stock for products used in this service
+    await this.deductServiceStock(businessId, appointment.serviceId, id);
+
+    // Trigger post-appointment and return-reminder automations, if configured
+    await automationService.schedulePostAppointment(id).catch((err) =>
+      logger.error({ err, appointmentId: id }, 'Failed to schedule post-appointment automation')
+    );
+    await automationService.scheduleReturnReminder(id).catch((err) =>
+      logger.error({ err, appointmentId: id }, 'Failed to schedule return-reminder automation')
+    );
+
     logger.info({ appointmentId: id }, 'Appointment completed');
 
     return appointment;
+  }
+
+  /**
+   * Deduct stock for products linked to a service (ServiceProduct), on service completion
+   */
+  private async deductServiceStock(businessId: string, serviceId: string, appointmentId: string): Promise<void> {
+    const links = await prisma.serviceProduct.findMany({
+      where: { serviceId },
+      include: { product: true },
+    });
+
+    for (const link of links) {
+      const quantityUsed = Number(link.quantityUsed);
+      const currentStock = Number(link.product.currentStock);
+      const newStock = Math.max(0, currentStock - quantityUsed);
+      const actualChange = currentStock - newStock;
+
+      if (actualChange <= 0) continue;
+
+      if (newStock === 0 && currentStock < quantityUsed) {
+        logger.warn(
+          { productId: link.productId, serviceId, appointmentId },
+          'Insufficient stock for service completion, clamped to 0'
+        );
+      }
+
+      await prisma.$transaction([
+        prisma.stockMovement.create({
+          data: {
+            businessId,
+            productId: link.productId,
+            type: 'SERVICE_USE',
+            quantity: -actualChange,
+            previousStock: currentStock,
+            newStock,
+            unitCost: Number(link.product.costPrice),
+            totalCost: Number(link.product.costPrice) * actualChange,
+            notes: 'Baixa automática por conclusão de atendimento',
+            appointmentId,
+          },
+        }),
+        prisma.product.update({
+          where: { id: link.productId },
+          data: { currentStock: newStock },
+        }),
+      ]);
+    }
   }
 
   /**

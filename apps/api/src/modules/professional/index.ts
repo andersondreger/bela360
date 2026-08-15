@@ -1,8 +1,88 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { PlatformModule } from '@prisma/client';
-import { prisma } from '../../config';
+import { PlatformModule, BadgeType } from '@prisma/client';
+import { prisma, logger } from '../../config';
 import { requirePremiumModule } from '../platform';
+
+const MILESTONE_APPOINTMENTS = [10, 50, 100, 250, 500, 1000];
+const TENURE_YEARS = [1, 2, 3, 5];
+
+/**
+ * Computa conquistas do profissional sob demanda (chamado a cada visita ao perfil,
+ * sem depender de cron): metas de atendimentos, avaliação 5 estrelas e tempo de casa.
+ */
+async function checkAndAwardBadges(profileId: string, userId: string): Promise<void> {
+  const [totalCompleted, ratingAgg, user, existingBadges] = await Promise.all([
+    prisma.appointment.count({ where: { professionalId: userId, status: 'COMPLETED' } }),
+    prisma.clientRating.aggregate({
+      where: { professionalId: userId },
+      _avg: { rating: true },
+      _count: true,
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } }),
+    prisma.professionalBadge.findMany({ where: { profileId }, select: { requirement: true } }),
+  ]);
+
+  const existingReqs = new Set(existingBadges.map((b) => b.requirement).filter(Boolean));
+  const toCreate: {
+    profileId: string;
+    type: BadgeType;
+    name: string;
+    description: string;
+    requirement: string;
+    achievedValue: string;
+  }[] = [];
+
+  for (const milestone of MILESTONE_APPOINTMENTS) {
+    const requirement = `${milestone} atendimentos`;
+    if (totalCompleted >= milestone && !existingReqs.has(requirement)) {
+      toCreate.push({
+        profileId,
+        type: BadgeType.MILESTONE,
+        name: `${milestone} atendimentos`,
+        description: `Você completou ${milestone} atendimentos!`,
+        requirement,
+        achievedValue: String(totalCompleted),
+      });
+    }
+  }
+
+  const avgRating = Number(ratingAgg._avg.rating || 0);
+  const totalRatings = ratingAgg._count;
+  const ratingRequirement = 'avaliacao-5-estrelas';
+  if (totalRatings >= 20 && avgRating >= 4.8 && !existingReqs.has(ratingRequirement)) {
+    toCreate.push({
+      profileId,
+      type: BadgeType.RATING,
+      name: 'Excelência 5 estrelas',
+      description: 'Média de avaliação acima de 4.8 com pelo menos 20 avaliações',
+      requirement: ratingRequirement,
+      achievedValue: avgRating.toFixed(2),
+    });
+  }
+
+  if (user) {
+    const years = (Date.now() - user.createdAt.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    for (const y of TENURE_YEARS) {
+      const requirement = `${y}-ano-de-casa`;
+      if (years >= y && !existingReqs.has(requirement)) {
+        toCreate.push({
+          profileId,
+          type: BadgeType.SPECIAL,
+          name: `${y} ano${y > 1 ? 's' : ''} de casa`,
+          description: `Você faz parte da equipe há ${y} ano${y > 1 ? 's' : ''}!`,
+          requirement,
+          achievedValue: String(y),
+        });
+      }
+    }
+  }
+
+  if (toCreate.length > 0) {
+    await prisma.professionalBadge.createMany({ data: toCreate });
+    logger.info({ profileId, count: toCreate.length }, 'Novas conquistas liberadas automaticamente');
+  }
+}
 
 const router: Router = Router();
 
@@ -41,8 +121,8 @@ const respondRatingSchema = z.object({
 
 const sendMarketingMessageSchema = z.object({
   message: z.string().min(1).max(4096).optional(),
-  clientIds: z.array(z.string().cuid()).optional(),
-  templateId: z.string().cuid().optional(),
+  clientIds: z.array(z.string().min(1)).optional(),
+  templateId: z.string().min(1).optional(),
 });
 
 function fail(res: Response, status: number, message: string, details?: unknown) {
@@ -100,7 +180,15 @@ router.get('/profile', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({ success: true, data: profile });
+    await checkAndAwardBadges(profile.id, userId).catch((err) =>
+      logger.error({ err, userId }, 'Falha ao checar conquistas automáticas')
+    );
+    const badges = await prisma.professionalBadge.findMany({
+      where: { profileId: profile.id },
+      orderBy: { earnedAt: 'desc' },
+    });
+
+    res.json({ success: true, data: { ...profile, badges } });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao buscar perfil');
   }
@@ -361,39 +449,11 @@ router.post('/goals/:userId', async (req: Request, res: Response) => {
   }
 });
 
-// Get team ranking
-router.get('/ranking', async (req: Request, res: Response) => {
-  try {
-    const businessId = req.user!.businessId;
-    const { month, year } = req.query;
-
-    const m = month ? parseInt(month as string) : new Date().getMonth() + 1;
-    const y = year ? parseInt(year as string) : new Date().getFullYear();
-
-    const rankings = await prisma.professionalRanking.findMany({
-      where: {
-        businessId,
-        month: m,
-        year: y,
-      },
-      orderBy: { position: 'asc' },
-      include: {
-        user: { select: { name: true } },
-      },
-    });
-
-    res.json({ success: true, data: rankings });
-  } catch (error) {
-    handleRouteError(error, res, 'Erro ao buscar ranking');
-  }
-});
-
-// Calculate and update rankings (cron job)
-router.post('/ranking/calculate', async (req: Request, res: Response) => {
-  try {
-    const businessId = req.user!.businessId;
-    const { month, year } = req.body;
-
+/**
+ * Recalcula o ranking do time para um mes/ano. Reaproveitada pela rota manual
+ * de admin e pelo refresh automatico "sob demanda" ao abrir o ranking do mes corrente.
+ */
+async function recalculateRankings(businessId: string, month: number, year: number): Promise<number> {
     const startOfMonth = new Date(year, month - 1, 1);
     const endOfMonth = new Date(year, month, 0);
 
@@ -482,7 +542,53 @@ router.post('/ranking/calculate', async (req: Request, res: Response) => {
       )
     );
 
-    res.json({ success: true, data: { count: rankingData.length } });
+    return rankingData.length;
+}
+
+// Get team ranking (recalcula automaticamente quando é o mês corrente, "sob demanda")
+router.get('/ranking', async (req: Request, res: Response) => {
+  try {
+    const businessId = req.user!.businessId;
+    const { month, year } = req.query;
+
+    const now = new Date();
+    const m = month ? parseInt(month as string) : now.getMonth() + 1;
+    const y = year ? parseInt(year as string) : now.getFullYear();
+    const isCurrentMonth = m === now.getMonth() + 1 && y === now.getFullYear();
+
+    if (isCurrentMonth) {
+      await recalculateRankings(businessId, m, y).catch((err) =>
+        logger.error({ err, businessId }, 'Falha ao recalcular ranking automaticamente')
+      );
+    }
+
+    const rankings = await prisma.professionalRanking.findMany({
+      where: {
+        businessId,
+        month: m,
+        year: y,
+      },
+      orderBy: { position: 'asc' },
+      include: {
+        user: { select: { name: true } },
+      },
+    });
+
+    res.json({ success: true, data: rankings });
+  } catch (error) {
+    handleRouteError(error, res, 'Erro ao buscar ranking');
+  }
+});
+
+// Calculate and update rankings on demand (owner/admin)
+router.post('/ranking/calculate', async (req: Request, res: Response) => {
+  try {
+    const businessId = req.user!.businessId;
+    const { month, year } = req.body;
+
+    const count = await recalculateRankings(businessId, month, year);
+
+    res.json({ success: true, data: { count } });
   } catch (error) {
     handleRouteError(error, res, 'Erro ao calcular ranking');
   }

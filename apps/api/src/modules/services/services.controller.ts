@@ -7,7 +7,7 @@ const createServiceSchema = z.object({
   description: z.string().max(500).optional(),
   duration: z.number().min(5).max(480), // 5 min to 8 hours
   price: z.number().min(0),
-  professionalIds: z.array(z.string().cuid()).optional(),
+  professionalIds: z.array(z.string().min(1)).optional(),
 });
 
 const updateServiceSchema = createServiceSchema.partial().extend({

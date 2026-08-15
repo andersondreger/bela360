@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, MessageSquare, Gift, UserX, Clock, ToggleLeft, ToggleRight, Crown, Send, CheckCircle2, TrendingUp } from 'lucide-react';
-import { Card, CardContent, Badge, PageHeader } from '@/components/ui';
-import { automationApi, isPremiumLockedError } from '@/lib/api';
+import { Zap, MessageSquare, Gift, UserX, Clock, ToggleLeft, ToggleRight, Crown, Send, CheckCircle2, TrendingUp, Pencil, Sun, Plus, Trash2, Info } from 'lucide-react';
+import { Card, CardContent, Badge, Button, Modal, Input, Textarea, Select, PageHeader } from '@/components/ui';
+import { automationApi, servicesApi, isPremiumLockedError, type Service } from '@/lib/api';
 
 interface Automation {
   id: string;
@@ -13,7 +13,22 @@ interface Automation {
   delayHours?: number | null;
   delayDays?: number | null;
   sendTime?: string | null;
+  serviceId?: string | null;
+  service?: { id: string; name: string } | null;
 }
+
+// Só esses dois tipos são resolvidos por serviço específico do atendimento (ver
+// automation.service.ts schedulePostAppointment/scheduleReturnReminder). Os
+// demais (aniversário, reativação, lembrete no dia) são sempre do negócio inteiro.
+const SERVICE_SCOPED_TYPES = ['POST_APPOINTMENT', 'RETURN_REMINDER'] as const;
+
+const VARIABLES_BY_TYPE: Record<string, string[]> = {
+  POST_APPOINTMENT: ['{{nome}}', '{{servico}}'],
+  RETURN_REMINDER: ['{{nome}}', '{{servico}}', '{{dias}}'],
+  BIRTHDAY: ['{{nome}}'],
+  REACTIVATION: ['{{nome}}', '{{dias}}'],
+  REMINDER_SAME_DAY: ['{{nome}}', '{{servico}}'],
+};
 
 interface AutomationStats {
   automations: number;
@@ -28,6 +43,7 @@ const automationTypes = {
   RETURN_REMINDER: { name: 'Lembrete de Retorno', icon: Clock, color: 'text-green-500' },
   BIRTHDAY: { name: 'Aniversário', icon: Gift, color: 'text-pink-500' },
   REACTIVATION: { name: 'Reativação', icon: UserX, color: 'text-orange-500' },
+  REMINDER_SAME_DAY: { name: 'Lembrete no Dia', icon: Sun, color: 'text-amber-500' },
 };
 
 export default function AutomacaoPage() {
@@ -42,18 +58,36 @@ export default function AutomacaoPage() {
     totalConverted: 0,
     conversionRate: 0,
   });
+  const [editingAutomation, setEditingAutomation] = useState<Automation | null>(null);
+  const [editForm, setEditForm] = useState({ template: '', delayHours: '', delayDays: '', sendTime: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [services, setServices] = useState<Service[]>([]);
+  const [showNewAutomation, setShowNewAutomation] = useState(false);
+  const [newForm, setNewForm] = useState({
+    type: 'POST_APPOINTMENT' as (typeof SERVICE_SCOPED_TYPES)[number],
+    serviceId: '',
+    template: '',
+    delayHours: '2',
+    delayDays: '',
+    sendTime: '',
+  });
+  const [savingNew, setSavingNew] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
     setLocked(false);
     try {
-      const [statsData, automationsData] = await Promise.all([
+      const [statsData, automationsData, servicesData] = await Promise.all([
         automationApi.getStats() as Promise<AutomationStats>,
         automationApi.list() as Promise<Automation[]>,
+        servicesApi.list().catch(() => []),
       ]);
       setStats(statsData);
       setAutomations(automationsData);
+      setServices(servicesData);
     } catch (err) {
       if (isPremiumLockedError(err)) {
         setLocked(true);
@@ -69,6 +103,49 @@ export default function AutomacaoPage() {
     loadData();
   }, [loadData]);
 
+  const handleOpenEdit = (automation: Automation) => {
+    setEditingAutomation(automation);
+    setEditForm({
+      template: automation.template,
+      delayHours: automation.delayHours != null ? String(automation.delayHours) : '',
+      delayDays: automation.delayDays != null ? String(automation.delayDays) : '',
+      sendTime: automation.sendTime || '',
+    });
+  };
+
+  const handleCloseEdit = () => {
+    setEditingAutomation(null);
+    setEditForm({ template: '', delayHours: '', delayDays: '', sendTime: '' });
+  };
+
+  const handleSubmitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAutomation || !editForm.template.trim()) {
+      alert('A mensagem não pode ficar vazia');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const updated = await automationApi.update(editingAutomation.id, {
+        template: editForm.template,
+        delayHours: editForm.delayHours ? Number(editForm.delayHours) : undefined,
+        delayDays: editForm.delayDays ? Number(editForm.delayDays) : undefined,
+        sendTime: editForm.sendTime || undefined,
+      });
+      setAutomations(prev => prev.map(a => (a.id === editingAutomation.id ? { ...a, ...(updated as Automation) } : a)));
+      handleCloseEdit();
+    } catch (err) {
+      if (isPremiumLockedError(err)) {
+        setLocked(true);
+      } else {
+        alert(err instanceof Error ? err.message : 'Erro ao salvar mensagem');
+      }
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const toggleAutomation = async (id: string) => {
     const previous = automations;
     setAutomations(prev => prev.map(a => (a.id === id ? { ...a, isActive: !a.isActive } : a)));
@@ -81,6 +158,65 @@ export default function AutomacaoPage() {
       } else {
         alert(err instanceof Error ? err.message : 'Erro ao atualizar automação');
       }
+    }
+  };
+
+  const handleOpenNew = () => {
+    setNewForm({
+      type: 'POST_APPOINTMENT',
+      serviceId: '',
+      template: '',
+      delayHours: '2',
+      delayDays: '',
+      sendTime: '',
+    });
+    setShowNewAutomation(true);
+  };
+
+  const handleSubmitNew = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newForm.serviceId) {
+      alert('Selecione o serviço/atendimento pra essa automação valer.');
+      return;
+    }
+    if (!newForm.template.trim()) {
+      alert('A mensagem não pode ficar vazia');
+      return;
+    }
+    setSavingNew(true);
+    try {
+      await automationApi.create({
+        type: newForm.type,
+        serviceId: newForm.serviceId,
+        template: newForm.template,
+        delayHours: newForm.delayHours ? Number(newForm.delayHours) : undefined,
+        delayDays: newForm.delayDays ? Number(newForm.delayDays) : undefined,
+        sendTime: newForm.sendTime || undefined,
+        isActive: true,
+      });
+      await loadData();
+      setShowNewAutomation(false);
+    } catch (err) {
+      if (isPremiumLockedError(err)) {
+        setLocked(true);
+      } else {
+        alert(err instanceof Error ? err.message : 'Erro ao criar automação');
+      }
+    } finally {
+      setSavingNew(false);
+    }
+  };
+
+  const handleDelete = async (automation: Automation) => {
+    if (!confirm('Remover esta automação específica de atendimento?')) return;
+    setDeletingId(automation.id);
+    try {
+      await automationApi.delete(automation.id);
+      setAutomations(prev => prev.filter(a => a.id !== automation.id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao remover automação');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -121,7 +257,26 @@ export default function AutomacaoPage() {
       <PageHeader
         title="Automação de Relacionamento"
         description="Configure mensagens automáticas para engajar seus clientes"
+        actions={
+          <Button onClick={handleOpenNew}>
+            <Plus className="h-4 w-4" />
+            Nova automação por atendimento
+          </Button>
+        }
       />
+
+      <div className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <p>
+          As mensagens usam variáveis entre chaves duplas que são trocadas pelo valor real na hora do envio:{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{{nome}}'}</code> (nome do cliente),{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{{servico}}'}</code> (serviço do atendimento) e{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">{'{{dias}}'}</code> (dias desde a última visita, em
+          Reativação e Retorno). &quot;Pós-atendimento&quot; e &quot;Lembrete de retorno&quot; podem ter uma mensagem
+          diferente por serviço — use o botão acima pra criar uma específica, por exemplo pro seu serviço de
+          coloração ter um lembrete de retorno diferente do genérico.
+        </p>
+      </div>
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
@@ -184,6 +339,9 @@ export default function AutomacaoPage() {
                       <Badge variant={automation.isActive ? 'success' : 'outline'}>
                         {automation.isActive ? 'Ativo' : 'Inativo'}
                       </Badge>
+                      {automation.service && (
+                        <Badge variant="info">{automation.service.name}</Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">{automation.template}</p>
                     <div className="flex gap-4 text-xs text-muted-foreground">
@@ -200,17 +358,34 @@ export default function AutomacaoPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => toggleAutomation(automation.id)}
-                  className="flex items-center gap-2 text-sm"
-                  aria-label={automation.isActive ? 'Desativar automação' : 'Ativar automação'}
-                >
-                  {automation.isActive ? (
-                    <ToggleRight className="h-8 w-8 text-primary" />
-                  ) : (
-                    <ToggleLeft className="h-8 w-8 text-muted-foreground" />
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => handleOpenEdit(automation)} title="Editar mensagem">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  {automation.serviceId && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive"
+                      onClick={() => handleDelete(automation)}
+                      loading={deletingId === automation.id}
+                      title="Remover automação específica"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   )}
-                </button>
+                  <button
+                    onClick={() => toggleAutomation(automation.id)}
+                    className="flex items-center gap-2 text-sm"
+                    aria-label={automation.isActive ? 'Desativar automação' : 'Ativar automação'}
+                  >
+                    {automation.isActive ? (
+                      <ToggleRight className="h-8 w-8 text-primary" />
+                    ) : (
+                      <ToggleLeft className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
               </CardContent>
             </Card>
           );
@@ -222,6 +397,135 @@ export default function AutomacaoPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Message Modal */}
+      <Modal open={!!editingAutomation} onClose={handleCloseEdit} title="Editar Mensagem">
+        {editingAutomation && (
+          <form onSubmit={handleSubmitEdit} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {automationTypes[editingAutomation.type as keyof typeof automationTypes]?.name || editingAutomation.type}
+            </p>
+            <Textarea
+              label="Mensagem"
+              value={editForm.template}
+              onChange={(e) => setEditForm(prev => ({ ...prev, template: e.target.value }))}
+              rows={4}
+              placeholder={`Variáveis disponíveis: ${(VARIABLES_BY_TYPE[editingAutomation.type] || ['{{nome}}']).join(', ')}`}
+            />
+            <p className="text-xs text-muted-foreground -mt-2">
+              Variáveis disponíveis aqui: {(VARIABLES_BY_TYPE[editingAutomation.type] || ['{{nome}}']).join(', ')}
+            </p>
+            {editingAutomation.delayHours != null && (
+              <Input
+                label="Enviar após (horas)"
+                type="number"
+                min="0"
+                value={editForm.delayHours}
+                onChange={(e) => setEditForm(prev => ({ ...prev, delayHours: e.target.value }))}
+              />
+            )}
+            {editingAutomation.delayDays != null && (
+              <Input
+                label="Enviar após (dias)"
+                type="number"
+                min="0"
+                value={editForm.delayDays}
+                onChange={(e) => setEditForm(prev => ({ ...prev, delayDays: e.target.value }))}
+              />
+            )}
+            {editingAutomation.sendTime != null && (
+              <Input
+                label="Horário de envio"
+                type="time"
+                value={editForm.sendTime}
+                onChange={(e) => setEditForm(prev => ({ ...prev, sendTime: e.target.value }))}
+              />
+            )}
+            <div className="flex gap-4 pt-4">
+              <Button type="button" variant="outline" onClick={handleCloseEdit} disabled={savingEdit} className="flex-1">
+                Cancelar
+              </Button>
+              <Button type="submit" loading={savingEdit} className="flex-1">
+                {savingEdit ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* New Service-Specific Automation Modal */}
+      <Modal
+        open={showNewAutomation}
+        onClose={() => setShowNewAutomation(false)}
+        title="Nova automação por atendimento"
+        description="Cria uma mensagem diferente da genérica pra um serviço específico"
+      >
+        <form onSubmit={handleSubmitNew} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Gatilho</label>
+            <Select
+              value={newForm.type}
+              onChange={(e) => setNewForm(prev => ({ ...prev, type: e.target.value as typeof prev.type }))}
+            >
+              {SERVICE_SCOPED_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {automationTypes[type].name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Serviço/atendimento *</label>
+            <Select
+              value={newForm.serviceId}
+              onChange={(e) => setNewForm(prev => ({ ...prev, serviceId: e.target.value }))}
+              required
+            >
+              <option value="">Selecione o serviço</option>
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Textarea
+            label="Mensagem"
+            value={newForm.template}
+            onChange={(e) => setNewForm(prev => ({ ...prev, template: e.target.value }))}
+            rows={4}
+            placeholder={`Variáveis disponíveis: ${VARIABLES_BY_TYPE[newForm.type].join(', ')}`}
+          />
+          <p className="text-xs text-muted-foreground -mt-2">
+            Variáveis disponíveis aqui: {VARIABLES_BY_TYPE[newForm.type].join(', ')}
+          </p>
+          {newForm.type === 'POST_APPOINTMENT' ? (
+            <Input
+              label="Enviar após (horas)"
+              type="number"
+              min="0"
+              value={newForm.delayHours}
+              onChange={(e) => setNewForm(prev => ({ ...prev, delayHours: e.target.value }))}
+            />
+          ) : (
+            <Input
+              label="Enviar após (dias sem retornar)"
+              type="number"
+              min="0"
+              value={newForm.delayDays}
+              onChange={(e) => setNewForm(prev => ({ ...prev, delayDays: e.target.value }))}
+            />
+          )}
+          <div className="flex gap-4 pt-4">
+            <Button type="button" variant="outline" onClick={() => setShowNewAutomation(false)} disabled={savingNew} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="submit" loading={savingNew} className="flex-1">
+              {savingNew ? 'Criando...' : 'Criar automação'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

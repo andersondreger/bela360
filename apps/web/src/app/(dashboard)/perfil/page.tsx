@@ -448,10 +448,19 @@ export default function PerfilPage() {
       {/* Badges */}
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
             <Award className="h-5 w-5" />
             Minhas Conquistas
           </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            As conquistas são liberadas automaticamente, sem precisar pedir pra ninguém: elas são recalculadas toda
+            vez que você abre esta página. Você ganha um selo de <strong>atendimentos</strong> em 10, 50, 100, 250,
+            500 e 1000 atendimentos concluídos; o selo de <strong>excelência 5 estrelas</strong> ao manter média
+            acima de 4,8 com pelo menos 20 avaliações; e um selo de <strong>tempo de casa</strong> a cada aniversário
+            (1, 2, 3 e 5 anos). O ranking do time acima também é recalculado sozinho todo mês, com base no
+            faturamento — quanto mais você atende e mais bem avaliado é, mais sobe. As metas mensais (com bônus, se
+            configurado) são definidas pelo dono do negócio na aba de metas.
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {badges.map((badge) => (
               <div
@@ -529,7 +538,7 @@ export default function PerfilPage() {
                 />
               </div>
               <div className="text-sm text-muted-foreground">
-                JPG, PNG ou WEBP, até 5MB.
+                JPG, PNG ou WEBP. Fotos grandes são redimensionadas automaticamente.
               </div>
             </div>
 

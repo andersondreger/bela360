@@ -8,7 +8,7 @@ const createClientSchema = z.object({
   email: z.string().email().optional(),
   birthDate: z.string().datetime().optional().transform(val => val ? new Date(val) : undefined),
   notes: z.string().max(1000).optional(),
-  preferredProfessionalId: z.string().cuid().optional(),
+  preferredProfessionalId: z.string().min(1).optional(),
 });
 
 const updateClientSchema = createClientSchema.partial().extend({

@@ -15,7 +15,7 @@ import {
 import { ExportButton } from '@/components/ExportButton';
 import { exportData, ExportFormat } from '@/lib/export';
 import { Button, Card, CardContent, Badge, Modal, Input, Textarea, Select, PageHeader } from '@/components/ui';
-import { inventoryApi, isPremiumLockedError } from '@/lib/api';
+import { inventoryApi, servicesApi, isPremiumLockedError, Service } from '@/lib/api';
 
 interface Product {
   id: string;
@@ -78,20 +78,26 @@ export default function EstoquePage() {
   });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [services, setServices] = useState<Service[]>([]);
+  const [serviceLinks, setServiceLinks] = useState<Array<{ serviceId: string; quantityUsed: number | string; service: { name: string } }>>([]);
+  const [linkForm, setLinkForm] = useState({ serviceId: '', quantityUsed: 1 });
+  const [savingLink, setSavingLink] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setLocked(false);
     setError('');
     try {
-      const [statsResp, productsList, movementsList] = await Promise.all([
+      const [statsResp, productsList, movementsList, servicesList] = await Promise.all([
         inventoryApi.getStats() as Promise<StockStats>,
         inventoryApi.listProducts() as Promise<Product[]>,
         inventoryApi.listMovements() as Promise<StockMovement[]>,
+        servicesApi.list(),
       ]);
       setStats(statsResp);
       setProducts(productsList || []);
       setMovements((movementsList || []).slice(0, 5));
+      setServices(servicesList || []);
     } catch (err) {
       if (isPremiumLockedError(err)) {
         setLocked(true);
@@ -138,11 +144,48 @@ export default function EstoquePage() {
     setSelectedProduct(null);
     setFormData({ name: '', brand: '', sku: '', category: 'INTERNAL_USE', costPrice: 0, minStock: 0, initialStock: 0, unit: 'un' });
     setMovementData({ type: 'PURCHASE', quantity: 0, notes: '' });
+    setServiceLinks([]);
+    setLinkForm({ serviceId: '', quantityUsed: 1 });
   };
 
-  const handleProductClick = (product: Product) => {
+  const handleProductClick = async (product: Product) => {
     setSelectedProduct(product);
     setShowMovementModal(true);
+    try {
+      const full = await inventoryApi.getProduct(product.id);
+      setServiceLinks(full.serviceProducts || []);
+    } catch {
+      setServiceLinks([]);
+    }
+  };
+
+  const handleLinkService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProduct || !linkForm.serviceId || linkForm.quantityUsed <= 0) {
+      alert('Selecione um serviço e uma quantidade válida');
+      return;
+    }
+    setSavingLink(true);
+    try {
+      await inventoryApi.linkService(selectedProduct.id, linkForm.serviceId, linkForm.quantityUsed);
+      const full = await inventoryApi.getProduct(selectedProduct.id);
+      setServiceLinks(full.serviceProducts || []);
+      setLinkForm({ serviceId: '', quantityUsed: 1 });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao vincular serviço');
+    } finally {
+      setSavingLink(false);
+    }
+  };
+
+  const handleUnlinkService = async (serviceId: string) => {
+    if (!selectedProduct) return;
+    try {
+      await inventoryApi.unlinkService(selectedProduct.id, serviceId);
+      setServiceLinks(prev => prev.filter(l => l.serviceId !== serviceId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao desvincular serviço');
+    }
   };
 
   const handleSubmitNewProduct = async (e: React.FormEvent) => {
@@ -618,6 +661,59 @@ export default function EstoquePage() {
               </Button>
             </div>
           </form>
+
+          <div className="mt-6 border-t border-border pt-4">
+            <h3 className="text-sm font-semibold mb-2">Vincular a serviços</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Ao concluir um atendimento desses serviços, essa quantidade é descontada automaticamente do estoque.
+            </p>
+            {serviceLinks.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {serviceLinks.map((link) => (
+                  <div key={link.serviceId} className="flex items-center justify-between p-2 bg-muted/50 rounded-lg text-sm">
+                    <span>{link.service.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">{toNum(link.quantityUsed)} {selectedProduct.unit}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleUnlinkService(link.serviceId)}
+                        className="text-destructive text-xs hover:underline"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <form onSubmit={handleLinkService} className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  label="Serviço"
+                  value={linkForm.serviceId}
+                  onChange={(e) => setLinkForm(prev => ({ ...prev, serviceId: e.target.value }))}
+                >
+                  <option value="">Selecione</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  label="Qtd. por atendimento"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={linkForm.quantityUsed}
+                  onChange={(e) => setLinkForm(prev => ({ ...prev, quantityUsed: Number(e.target.value) }))}
+                />
+              </div>
+              <Button type="submit" size="sm" variant="outline" loading={savingLink} disabled={savingLink} className="w-full">
+                Vincular serviço
+              </Button>
+            </form>
+          </div>
         </Modal>
       )}
     </div>

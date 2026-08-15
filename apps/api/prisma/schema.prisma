@@ -181,6 +181,7 @@ model Business {
   marketingSuggestions MarketingSuggestion[]
   contentTemplates     ContentTemplate[]
   commissionPayouts    CommissionPayout[]
+  marketingCreations   MarketingCreation[]
 
   // Platform plan
   platformCoupons PlatformCoupon[]
@@ -527,6 +528,7 @@ enum AutomationType {
   RETURN_REMINDER // Lembrete de retorno
   BIRTHDAY // Aniversário
   REACTIVATION // Reativação de inativos
+  REMINDER_SAME_DAY // Lembrete no dia (confirmação e lembrete 24h já são enviados direto pelo fluxo de agendamento)
 }
 
 enum AutomationLogStatus {
@@ -631,6 +633,7 @@ model Waitlist {
   // Preferences
   desiredDate   DateTime  @db.Date
   desiredPeriod DayPeriod @default(ANY)
+  desiredTime   String? // "HH:mm", opcional
 
   // Status
   status     WaitlistStatus @default(WAITING)
@@ -1488,6 +1491,33 @@ model ContentTemplate {
   @@index([businessId])
   @@index([category])
   @@map("content_templates")
+}
+
+enum CreationStatus {
+  DRAFT // Rascunho, ainda editando
+  READY // Pronta, aguardando publicação
+  PUBLISHED // Já usada numa campanha/postagem
+}
+
+// Peça visual criada no editor de publicidade (fundo + foto + texto), com
+// download e histórico visual do que já foi feito e do que está planejado.
+model MarketingCreation {
+  id         String   @id @default(cuid())
+  businessId String
+  title      String
+  imageUrl   String
+  background String? // id do fundo usado, so pra reabrir/duplicar depois
+
+  status CreationStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@map("marketing_creations")
 }
 
 // ============================================

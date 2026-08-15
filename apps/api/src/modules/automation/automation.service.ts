@@ -10,7 +10,7 @@ const createAutomationSchema = z.object({
   delayHours: z.number().int().min(0).optional(),
   delayDays: z.number().int().min(0).optional(),
   sendTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  serviceId: z.string().cuid().optional(),
+  serviceId: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -163,7 +163,10 @@ export class AutomationService {
 
     if (!appointment) return;
 
-    const automation = appointment.business.automations[0];
+    // Prioriza automação específica pro serviço do atendimento; cai pra genérica (serviceId null) se não houver
+    const automation =
+      appointment.business.automations.find((a) => a.serviceId === appointment.serviceId) ||
+      appointment.business.automations.find((a) => !a.serviceId);
     if (!automation) return;
 
     const delayHours = automation.delayHours || 2;
@@ -332,6 +335,62 @@ export class AutomationService {
       totalConverted,
       conversionRate: totalSent > 0 ? (totalConverted / totalSent) * 100 : 0,
     };
+  }
+
+  /**
+   * Schedule same-day reminders for appointments happening today (called daily)
+   */
+  async scheduleSameDayReminders(businessId: string) {
+    const automation = await prisma.automation.findFirst({
+      where: {
+        businessId,
+        type: AutomationType.REMINDER_SAME_DAY,
+        isActive: true,
+      },
+    });
+
+    if (!automation) return;
+
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        businessId,
+        startTime: { gte: startOfDay, lte: endOfDay },
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+    });
+
+    let scheduledFor = new Date();
+    if (automation.sendTime) {
+      const [hours, minutes] = automation.sendTime.split(':').map(Number);
+      scheduledFor.setHours(hours, minutes, 0, 0);
+      if (scheduledFor < now) scheduledFor = now;
+    }
+
+    for (const appointment of appointments) {
+      const existing = await prisma.automationLog.findFirst({
+        where: { automationId: automation.id, appointmentId: appointment.id },
+      });
+
+      if (existing) continue;
+
+      await prisma.automationLog.create({
+        data: {
+          automationId: automation.id,
+          clientId: appointment.clientId,
+          appointmentId: appointment.id,
+          scheduledFor,
+          status: AutomationLogStatus.PENDING,
+        },
+      });
+
+      logger.info({ appointmentId: appointment.id }, 'Same-day reminder scheduled');
+    }
   }
 
   /**
@@ -514,6 +573,12 @@ export class AutomationService {
         template: 'Oi {{nome}}, sentimos sua falta! Faz tempo que não nos vemos. Que tal voltar? Temos novidades!',
         delayDays: 60,
         sendTime: '10:00',
+        isActive: false,
+      },
+      {
+        type: AutomationType.REMINDER_SAME_DAY,
+        template: 'Bom dia {{nome}}! Hoje é o dia do seu {{servico}}. Nos vemos em breve!',
+        sendTime: '08:00',
         isActive: false,
       },
     ];

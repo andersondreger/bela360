@@ -62,6 +62,24 @@ export class WaitlistController {
   }
 
   /**
+   * Update a waitlist entry
+   */
+  async update(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const { id } = req.params;
+      const entry = await waitlistService.update(businessId, id, req.body);
+
+      res.json({
+        success: true,
+        data: entry,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Remove from waitlist
    */
   async remove(req: Request, res: Response, next: NextFunction) {

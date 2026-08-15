@@ -144,11 +144,41 @@ export const api = {
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
 };
 
+const MAX_UPLOAD_DIMENSION = 1600;
+
+/** Redimensiona/comprime imagens grandes (fotos de celular chegam com 6-8MB) antes do upload. */
+async function downscaleImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    if (scale >= 1 && file.size <= 2 * 1024 * 1024) return file;
+
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+
+    const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, outputType, 0.85));
+    if (!blob) return file;
+    return new File([blob], file.name, { type: outputType });
+  } catch {
+    return file;
+  }
+}
+
 /** Upload de imagem (logo do negócio, avatar) — multipart, sem Content-Type manual pro browser setar o boundary. */
 export async function uploadImage(file: File): Promise<{ url: string }> {
   const token = getAccessToken();
+  const optimized = await downscaleImage(file);
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', optimized);
 
   const response = await fetch(`${API_BASE_URL}/uploads/image`, {
     method: 'POST',
@@ -209,6 +239,29 @@ export interface BusinessInfoUpdate {
   zipCode?: string;
 }
 
+export interface Professional {
+  id: string;
+  businessId: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  role: 'PROFESSIONAL' | 'ADMIN' | 'RECEPTIONIST' | 'OWNER';
+  isActive: boolean;
+  color?: string | null;
+  commission?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfessionalInput {
+  name: string;
+  phone: string;
+  email?: string;
+  role?: 'PROFESSIONAL' | 'ADMIN' | 'RECEPTIONIST';
+  color?: string;
+  commission?: number;
+}
+
 export const businessApi = {
   getCurrent: () => api.get<Business>('/business'),
 
@@ -216,6 +269,15 @@ export const businessApi = {
 
   updateBranding: (branding: BusinessBranding) =>
     api.put<Business>('/business', { settings: { branding } }),
+
+  getProfessionals: () => api.get<Professional[]>('/business/professionals'),
+
+  addProfessional: (data: ProfessionalInput) => api.post<Professional>('/business/professionals', data),
+
+  updateProfessional: (id: string, data: Partial<ProfessionalInput>) =>
+    api.put<Professional>(`/business/professionals/${id}`, data),
+
+  removeProfessional: (id: string) => api.delete<{ message: string }>(`/business/professionals/${id}`),
 };
 
 // Platform plan/coupon API
@@ -397,6 +459,10 @@ export const inventoryApi = {
   updateProduct: (id: string, data: Record<string, unknown>) => api.put<any>(`/inventory/products/${id}`, data),
   registerMovement: (id: string, data: { type: string; quantity: number; unitCost?: number; notes?: string }) =>
     api.post<any>(`/inventory/products/${id}/movement`, data),
+  linkService: (productId: string, serviceId: string, quantityUsed: number) =>
+    api.post<any>(`/inventory/products/${productId}/services/${serviceId}`, { quantityUsed }),
+  unlinkService: (productId: string, serviceId: string) =>
+    api.delete<{ removed: boolean }>(`/inventory/products/${productId}/services/${serviceId}`),
   lowStockAlerts: () => api.get<any>('/inventory/alerts/low-stock'),
   getStats: () => api.get<any>('/inventory/stats'),
   listMovements: (params?: { productId?: string; type?: string }) => {
@@ -430,7 +496,23 @@ export const marketingApi = {
   getIdleSlots: () => api.get<any[]>('/marketing/idle-slots'),
   listTemplates: (category?: string) => api.get<any[]>(`/marketing/templates${category ? `?category=${category}` : ''}`),
   createTemplate: (data: Record<string, unknown>) => api.post<any>('/marketing/templates', data),
+  listCreations: () => api.get<MarketingCreation[]>('/marketing/creations'),
+  createCreation: (data: { title: string; imageUrl: string; background?: string; status?: MarketingCreation['status'] }) =>
+    api.post<MarketingCreation>('/marketing/creations', data),
+  updateCreation: (id: string, data: Partial<{ title: string; status: MarketingCreation['status'] }>) =>
+    api.put<MarketingCreation>(`/marketing/creations/${id}`, data),
+  deleteCreation: (id: string) => api.delete<{ message: string }>(`/marketing/creations/${id}`),
 };
+
+export interface MarketingCreation {
+  id: string;
+  title: string;
+  imageUrl: string;
+  background?: string | null;
+  status: 'DRAFT' | 'READY' | 'PUBLISHED';
+  createdAt: string;
+  updatedAt: string;
+}
 
 // Automation API (premium module — expect isPremiumLockedError on a básico plan)
 export const automationApi = {
@@ -438,7 +520,7 @@ export const automationApi = {
   list: () => api.get<any[]>('/automation'),
   create: (data: Record<string, unknown>) => api.post<any>('/automation', data),
   update: (id: string, data: Record<string, unknown>) => api.put<any>(`/automation/${id}`, data),
-  toggle: (id: string) => api.post<any>(`/automation/${id}/toggle`),
+  toggle: (id: string) => api.patch<any>(`/automation/${id}/toggle`),
   delete: (id: string) => api.delete<{ message: string }>(`/automation/${id}`),
 };
 
@@ -550,9 +632,12 @@ export const waitlistApi = {
   list: (params?: { date?: string; status?: string }) => {
     return api.get<any[]>(`/waitlist${buildQuery(params)}`);
   },
-  create: (data: { clientId: string; serviceId: string; professionalId?: string; desiredDate: string; desiredPeriod?: string }) =>
+  create: (data: { clientId: string; serviceId: string; professionalId?: string; desiredDate: string; desiredPeriod?: string; desiredTime?: string }) =>
     api.post<any>('/waitlist', data),
+  update: (id: string, data: Partial<{ serviceId: string; professionalId: string | null; desiredDate: string; desiredPeriod: string; desiredTime: string | null }>) =>
+    api.put<any>(`/waitlist/${id}`, data),
   delete: (id: string) => api.delete<{ message: string }>(`/waitlist/${id}`),
+  convert: (id: string, appointmentId: string) => api.post<any>(`/waitlist/${id}/convert`, { appointmentId }),
 };
 
 // WhatsApp API

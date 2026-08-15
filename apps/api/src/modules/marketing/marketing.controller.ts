@@ -526,6 +526,60 @@ export class MarketingController {
       next(error);
     }
   }
+
+  /**
+   * List saved ad creations
+   */
+  async getCreations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const creations = await marketingService.listCreations(businessId);
+      res.json({ success: true, data: creations });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Save an ad creation from the editor
+   */
+  async createCreation(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const creation = await marketingService.createCreation(businessId, req.body);
+      res.status(201).json({ success: true, data: creation });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Update an ad creation
+   */
+  async updateCreation(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const { id } = req.params;
+      const creation = await marketingService.updateCreation(businessId, id, req.body);
+      res.json({ success: true, data: creation });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete an ad creation
+   */
+  async deleteCreation(req: Request, res: Response, next: NextFunction) {
+    try {
+      const businessId = req.user!.businessId;
+      const { id } = req.params;
+      await marketingService.deleteCreation(businessId, id);
+      res.json({ success: true, message: 'Criação removida' });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const marketingController = new MarketingController();

@@ -10,9 +10,11 @@ import {
   Plus,
   Crown,
   Target,
+  Sparkles,
+  MessageCircle,
 } from 'lucide-react';
 import { Button, Card, CardContent, Badge, Modal, Input, Textarea, Select, PageHeader } from '@/components/ui';
-import { loyaltyApi, isPremiumLockedError } from '@/lib/api';
+import { loyaltyApi, clientsApi, isPremiumLockedError, type Client } from '@/lib/api';
 
 interface LoyaltyStats {
   totalClients: number;
@@ -28,9 +30,12 @@ interface LoyaltyStats {
 
 interface LoyaltyProgramData {
   pointsPerReal: number | string;
+  useCashback?: boolean;
+  cashbackPercent?: number | string;
   silverThreshold: number;
   goldThreshold: number;
   diamondThreshold: number;
+  pointsExpirationMonths?: number;
 }
 
 interface Reward {
@@ -80,6 +85,27 @@ export default function FidelidadePage() {
     discountValue: 10,
   });
   const [saving, setSaving] = useState(false);
+  const [showEditProgram, setShowEditProgram] = useState(false);
+  const [programForm, setProgramForm] = useState({
+    pointsPerReal: 1,
+    useCashback: false,
+    cashbackPercent: 5,
+    silverThreshold: 100,
+    goldThreshold: 500,
+    diamondThreshold: 1000,
+    pointsExpirationMonths: 12,
+  });
+  const [savingProgram, setSavingProgram] = useState(false);
+
+  const [showRedeem, setShowRedeem] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [redeemClientId, setRedeemClientId] = useState('');
+  const [clientPoints, setClientPoints] = useState<{ currentPoints: number; currentTier: string } | null>(null);
+  const [loadingClientPoints, setLoadingClientPoints] = useState(false);
+  const [redeemRewardId, setRedeemRewardId] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState('');
+  const [redeemResult, setRedeemResult] = useState<{ couponCode: string; expiresAt: string; rewardName: string } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -145,6 +171,82 @@ export default function FidelidadePage() {
   const handleCloseModal = () => {
     setShowNewReward(false);
     setFormData({ name: '', description: '', pointsCost: 100, type: 'DISCOUNT_PERCENT', discountValue: 10 });
+  };
+
+  const handleOpenRedeem = () => {
+    setShowRedeem(true);
+    setRedeemClientId('');
+    setClientPoints(null);
+    setRedeemRewardId('');
+    setRedeemError('');
+    setRedeemResult(null);
+    if (clients.length === 0) {
+      clientsApi.list().then(setClients).catch(() => setClients([]));
+    }
+  };
+
+  const handleCloseRedeem = () => {
+    setShowRedeem(false);
+  };
+
+  const handleSelectClient = async (clientId: string) => {
+    setRedeemClientId(clientId);
+    setRedeemRewardId('');
+    setClientPoints(null);
+    if (!clientId) return;
+    setLoadingClientPoints(true);
+    try {
+      const points = await loyaltyApi.getClientPoints(clientId);
+      setClientPoints(points);
+    } catch {
+      setClientPoints({ currentPoints: 0, currentTier: 'BRONZE' });
+    } finally {
+      setLoadingClientPoints(false);
+    }
+  };
+
+  const handleSubmitRedeem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!redeemClientId || !redeemRewardId) return;
+    setRedeeming(true);
+    setRedeemError('');
+    try {
+      const result = await loyaltyApi.redeem(redeemClientId, redeemRewardId);
+      const reward = rewards.find((r) => r.id === redeemRewardId);
+      setRedeemResult({ couponCode: result.couponCode, expiresAt: result.expiresAt, rewardName: reward?.name || '' });
+      loadData();
+    } catch (err) {
+      setRedeemError(err instanceof Error ? err.message : 'Erro ao resgatar recompensa');
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  const handleOpenEditProgram = () => {
+    setProgramForm({
+      pointsPerReal: Number(program?.pointsPerReal ?? 1),
+      useCashback: program?.useCashback ?? false,
+      cashbackPercent: Number(program?.cashbackPercent ?? 5),
+      silverThreshold: program?.silverThreshold ?? 100,
+      goldThreshold: program?.goldThreshold ?? 500,
+      diamondThreshold: program?.diamondThreshold ?? 1000,
+      pointsExpirationMonths: program?.pointsExpirationMonths ?? 12,
+    });
+    setShowEditProgram(true);
+  };
+
+  const handleSubmitProgram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProgram(true);
+    try {
+      const updated = await loyaltyApi.saveProgram(programForm);
+      setProgram(updated as LoyaltyProgramData);
+      setShowEditProgram(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao salvar configurações do programa');
+    } finally {
+      setSavingProgram(false);
+    }
   };
 
   const handleSubmitNewReward = async (e: React.FormEvent) => {
@@ -301,10 +403,16 @@ export default function FidelidadePage() {
         {/* Rewards */}
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Gift className="h-5 w-5" />
-              Recompensas Disponiveis
-            </h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Gift className="h-5 w-5" />
+                Recompensas Disponiveis
+              </h2>
+              <Button variant="outline" size="sm" onClick={handleOpenRedeem} disabled={rewards.length === 0}>
+                <Sparkles className="h-4 w-4" />
+                Resgatar para cliente
+              </Button>
+            </div>
             <div className="space-y-3">
               {rewards.length === 0 && (
                 <p className="text-sm text-muted-foreground">Nenhuma recompensa cadastrada ainda.</p>
@@ -363,10 +471,15 @@ export default function FidelidadePage() {
       {/* Program Settings Preview */}
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Configuracoes do Programa
-          </h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Configuracoes do Programa
+            </h2>
+            <Button variant="outline" size="sm" onClick={handleOpenEditProgram}>
+              Editar
+            </Button>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 bg-muted/50 rounded-xl text-center">
               <p className="text-sm text-muted-foreground">Pontos por R$1</p>
@@ -387,6 +500,78 @@ export default function FidelidadePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Program Modal */}
+      <Modal open={showEditProgram} onClose={() => setShowEditProgram(false)} title="Configurações do Programa">
+        <form onSubmit={handleSubmitProgram} className="space-y-4">
+          <Input
+            label="Pontos por R$1 gasto"
+            type="number"
+            step="0.01"
+            min="0"
+            value={programForm.pointsPerReal}
+            onChange={(e) => setProgramForm(prev => ({ ...prev, pointsPerReal: Number(e.target.value) }))}
+          />
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={programForm.useCashback}
+              onChange={(e) => setProgramForm(prev => ({ ...prev, useCashback: e.target.checked }))}
+              className="rounded border-border text-primary focus:ring-ring"
+            />
+            Usar cashback em vez de pontos
+          </label>
+          {programForm.useCashback && (
+            <Input
+              label="Cashback (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={programForm.cashbackPercent}
+              onChange={(e) => setProgramForm(prev => ({ ...prev, cashbackPercent: Number(e.target.value) }))}
+            />
+          )}
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Prata a partir de"
+              type="number"
+              min="0"
+              value={programForm.silverThreshold}
+              onChange={(e) => setProgramForm(prev => ({ ...prev, silverThreshold: Number(e.target.value) }))}
+            />
+            <Input
+              label="Ouro a partir de"
+              type="number"
+              min="0"
+              value={programForm.goldThreshold}
+              onChange={(e) => setProgramForm(prev => ({ ...prev, goldThreshold: Number(e.target.value) }))}
+            />
+            <Input
+              label="Diamante a partir de"
+              type="number"
+              min="0"
+              value={programForm.diamondThreshold}
+              onChange={(e) => setProgramForm(prev => ({ ...prev, diamondThreshold: Number(e.target.value) }))}
+            />
+          </div>
+          <Input
+            label="Pontos expiram após (meses)"
+            type="number"
+            min="1"
+            value={programForm.pointsExpirationMonths}
+            onChange={(e) => setProgramForm(prev => ({ ...prev, pointsExpirationMonths: Number(e.target.value) }))}
+          />
+          <div className="flex gap-4 pt-4">
+            <Button type="button" variant="outline" onClick={() => setShowEditProgram(false)} disabled={savingProgram} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="submit" loading={savingProgram} className="flex-1">
+              {savingProgram ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* New Reward Modal */}
       <Modal open={showNewReward} onClose={handleCloseModal} title="Nova Recompensa">
@@ -457,6 +642,83 @@ export default function FidelidadePage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Redeem Reward Modal */}
+      <Modal open={showRedeem} onClose={handleCloseRedeem} title="Resgatar recompensa">
+        {redeemResult ? (
+          <div className="space-y-4 text-center py-2">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/15">
+              <Gift className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="font-medium">{redeemResult.rewardName} resgatada!</p>
+              <Badge variant="success" className="mt-2 font-mono text-sm">
+                {redeemResult.couponCode}
+              </Badge>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Válido até {new Date(redeemResult.expiresAt).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+            <p className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+              <MessageCircle className="h-4 w-4 text-emerald-500" />
+              O cupom já foi enviado pro cliente pelo WhatsApp.
+            </p>
+            <Button variant="outline" onClick={handleCloseRedeem} className="w-full">
+              Fechar
+            </Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmitRedeem} className="space-y-4">
+            <Select
+              label="Cliente *"
+              value={redeemClientId}
+              onChange={(e) => handleSelectClient(e.target.value)}
+              required
+            >
+              <option value="">Selecione um cliente</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </Select>
+
+            {redeemClientId && (
+              <p className="text-sm text-muted-foreground">
+                {loadingClientPoints
+                  ? 'Carregando saldo...'
+                  : `Saldo atual: ${clientPoints?.currentPoints ?? 0} pontos · Nível ${tierLabels[(clientPoints?.currentTier || 'BRONZE') as keyof typeof tierLabels]}`}
+              </p>
+            )}
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Recompensa *</label>
+              <Select value={redeemRewardId} onChange={(e) => setRedeemRewardId(e.target.value)} required disabled={!redeemClientId}>
+                <option value="">Selecione a recompensa</option>
+                {rewards.map((reward) => {
+                  const affordable = !clientPoints || clientPoints.currentPoints >= reward.pointsCost;
+                  return (
+                    <option key={reward.id} value={reward.id} disabled={!affordable}>
+                      {reward.name} — {reward.pointsCost} pts{!affordable ? ' (pontos insuficientes)' : ''}
+                    </option>
+                  );
+                })}
+              </Select>
+            </div>
+
+            {redeemError && <p className="text-sm text-destructive">{redeemError}</p>}
+
+            <div className="flex gap-4 pt-4">
+              <Button type="button" variant="outline" onClick={handleCloseRedeem} disabled={redeeming} className="flex-1">
+                Cancelar
+              </Button>
+              <Button type="submit" loading={redeeming} disabled={!redeemClientId || !redeemRewardId} className="flex-1">
+                {redeeming ? 'Resgatando...' : 'Resgatar'}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

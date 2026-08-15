@@ -77,6 +77,11 @@ const scheduleWorker = new Worker<ScheduleAutomationsJob>(
             await automationService.scheduleReactivationMessages(business.id);
             logger.info({ businessId: business.id }, 'Reactivation messages scheduled');
           }
+
+          if (type === 'daily_check') {
+            await automationService.scheduleSameDayReminders(business.id);
+            logger.info({ businessId: business.id }, 'Same-day reminders scheduled');
+          }
         } catch (err) {
           logger.error({ businessId: business.id, error: err }, 'Failed to schedule automations for business');
         }

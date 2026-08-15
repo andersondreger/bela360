@@ -1,8 +1,14 @@
 import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
+import { MulterError } from 'multer';
 import { AppError, ValidationError } from '../errors';
 import { logger } from '../../config';
 import type { ApiResponse } from '@bela360/shared';
+
+const MULTER_ERROR_MESSAGES: Record<string, string> = {
+  LIMIT_FILE_SIZE: 'Imagem muito grande. Envie um arquivo de até 10MB.',
+  LIMIT_UNEXPECTED_FILE: 'Campo de arquivo inesperado.',
+};
 
 export const errorHandler: ErrorRequestHandler = (
   err: Error,
@@ -30,6 +36,18 @@ export const errorHandler: ErrorRequestHandler = (
         code: 'VALIDATION_ERROR',
         message: 'Dados inválidos',
         details: err.errors,
+      },
+    });
+    return;
+  }
+
+  // Handle file upload errors (multer)
+  if (err instanceof MulterError) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: err.code,
+        message: MULTER_ERROR_MESSAGES[err.code] || 'Erro ao enviar o arquivo.',
       },
     });
     return;

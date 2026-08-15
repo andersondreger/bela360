@@ -38,7 +38,7 @@ const createProfessionalSchema = z.object({
 });
 
 const setWorkingHoursSchema = z.object({
-  professionalId: z.string().cuid().optional(),
+  professionalId: z.string().min(1).optional(),
   hours: z.array(
     z.object({
       dayOfWeek: z.enum([

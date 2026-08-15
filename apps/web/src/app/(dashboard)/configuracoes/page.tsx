@@ -1,16 +1,21 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Save, MessageCircle, CheckCircle2, Sparkles, Upload, Loader2 } from 'lucide-react';
-import { PageHeader, Button, Input, Badge } from '@/components/ui';
+import { Plus, Save, MessageCircle, CheckCircle2, Sparkles, Upload, Loader2, Pencil, Trash2, Settings } from 'lucide-react';
+import { PageHeader, Button, Input, Badge, Modal } from '@/components/ui';
+import { WhatsAppConfigModal } from '@/components/WhatsAppConfigModal';
 import {
   businessApi,
   platformApi,
+  whatsappApi,
   uploadImage,
   PREMIUM_MODULE_LABELS,
   type Business,
   type BusinessBranding,
   type PremiumModule,
+  type Professional,
+  type ProfessionalInput,
+  type WhatsAppStatus,
 } from '@/lib/api';
 
 export default function ConfiguracoesPage() {
@@ -101,114 +106,9 @@ export default function ConfiguracoesPage() {
           </div>
         )}
 
-        {activeTab === 'profissionais' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <p className="text-muted-foreground">Gerencie os profissionais do seu negocio.</p>
-              <Button variant="primary" size="sm">
-                <Plus className="w-4 h-4" />
-                Adicionar profissional
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { name: 'Ana Silva', role: 'Cabeleireira', color: '#7C3AED', active: true },
-                { name: 'Carlos Santos', role: 'Barbeiro', color: '#EC4899', active: true },
-                { name: 'Julia Oliveira', role: 'Cabeleireira', color: '#10B981', active: true },
-              ].map((prof) => (
-                <div key={prof.name} className="p-4 border border-border rounded-xl bg-card">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-medium"
-                      style={{ backgroundColor: prof.color }}
-                    >
-                      {prof.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{prof.name}</p>
-                      <p className="text-sm text-muted-foreground">{prof.role}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    {prof.active ? (
-                      <Badge variant="success">Ativo</Badge>
-                    ) : (
-                      <Badge variant="outline">Inativo</Badge>
-                    )}
-                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary">
-                      Editar
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {activeTab === 'profissionais' && <ProfissionaisTab />}
 
-        {activeTab === 'whatsapp' && (
-          <div className="space-y-6 max-w-2xl">
-            <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-xl dark:bg-emerald-500/10 dark:border-emerald-500/20">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-emerald-800 dark:text-emerald-400">WhatsApp Conectado</h3>
-                  <p className="text-sm text-emerald-600 dark:text-emerald-400/80">+55 11 99999-9999</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="font-medium text-foreground flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-primary" />
-                Configuracoes do Bot
-              </h3>
-
-              <label className="flex items-center justify-between p-4 border border-border rounded-xl">
-                <div>
-                  <p className="font-medium text-foreground">Respostas automaticas</p>
-                  <p className="text-sm text-muted-foreground">Responder automaticamente mensagens fora do horario</p>
-                </div>
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="w-5 h-5 rounded border-border text-primary focus:ring-ring"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-4 border border-border rounded-xl">
-                <div>
-                  <p className="font-medium text-foreground">Lembretes automaticos</p>
-                  <p className="text-sm text-muted-foreground">Enviar lembrete 24h antes do agendamento</p>
-                </div>
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="w-5 h-5 rounded border-border text-primary focus:ring-ring"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-4 border border-border rounded-xl">
-                <div>
-                  <p className="font-medium text-foreground">Confirmacao automatica</p>
-                  <p className="text-sm text-muted-foreground">Confirmar agendamentos automaticamente</p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="w-5 h-5 rounded border-border text-primary focus:ring-ring"
-                />
-              </label>
-            </div>
-
-            <Button variant="primary">
-              <Save className="w-4 h-4" />
-              Salvar configuracoes
-            </Button>
-          </div>
-        )}
+        {activeTab === 'whatsapp' && <WhatsappTab />}
       </div>
     </div>
   );
@@ -407,7 +307,7 @@ function MarcaTab() {
             onChange={handleLogoChange}
           />
         </div>
-        <p className="mt-1.5 text-xs text-muted-foreground">JPG, PNG ou WEBP, até 5MB.</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">JPG, PNG ou WEBP. Fotos grandes são redimensionadas automaticamente.</p>
       </div>
 
       <div>
@@ -541,6 +441,341 @@ function PlanoTab() {
 
       {message && <p className="text-sm text-emerald-600">{message}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+const ROLE_LABELS: Record<Professional['role'], string> = {
+  PROFESSIONAL: 'Profissional',
+  ADMIN: 'Administrador',
+  RECEPTIONIST: 'Recepcionista',
+  OWNER: 'Proprietário(a)',
+};
+
+const EMPTY_PROFESSIONAL_FORM: ProfessionalInput = {
+  name: '',
+  phone: '',
+  email: '',
+  role: 'PROFESSIONAL',
+  color: '#7C3AED',
+  commission: undefined,
+};
+
+function ProfissionaisTab() {
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState('');
+
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Professional | null>(null);
+  const [form, setForm] = useState<ProfessionalInput>(EMPTY_PROFESSIONAL_FORM);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const loadProfessionals = () => {
+    setLoading(true);
+    businessApi
+      .getProfessionals()
+      .then(setProfessionals)
+      .catch(() => setListError('Não foi possível carregar os profissionais.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(loadProfessionals, []);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm(EMPTY_PROFESSIONAL_FORM);
+    setFormError('');
+    setShowModal(true);
+  };
+
+  const openEdit = (prof: Professional) => {
+    setEditing(prof);
+    setForm({
+      name: prof.name,
+      phone: prof.phone,
+      email: prof.email || '',
+      role: prof.role === 'OWNER' ? 'ADMIN' : prof.role,
+      color: prof.color || '#7C3AED',
+      commission: prof.commission ? Number(prof.commission) : undefined,
+    });
+    setFormError('');
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.phone.trim()) {
+      setFormError('Preencha nome e telefone.');
+      return;
+    }
+    setSaving(true);
+    setFormError('');
+    try {
+      const payload: ProfessionalInput = {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email?.trim() || undefined,
+        role: form.role,
+        color: form.color,
+        commission: form.commission,
+      };
+      if (editing) {
+        await businessApi.updateProfessional(editing.id, payload);
+      } else {
+        await businessApi.addProfessional(payload);
+      }
+      setShowModal(false);
+      loadProfessionals();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao salvar profissional.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async (prof: Professional) => {
+    if (!confirm(`Remover ${prof.name} da equipe? O profissional deixará de aparecer na agenda.`)) return;
+    setRemovingId(prof.id);
+    try {
+      await businessApi.removeProfessional(prof.id);
+      setProfessionals((list) => list.filter((p) => p.id !== prof.id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao remover profissional.');
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-muted-foreground">Gerencie os profissionais do seu negócio.</p>
+        <Button variant="primary" size="sm" onClick={openAdd}>
+          <Plus className="w-4 h-4" />
+          Adicionar profissional
+        </Button>
+      </div>
+
+      {listError && <p className="text-sm text-destructive">{listError}</p>}
+
+      {loading ? (
+        <p className="text-muted-foreground">Carregando...</p>
+      ) : professionals.length === 0 ? (
+        <p className="text-muted-foreground">Nenhum profissional cadastrado ainda.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {professionals.map((prof) => (
+            <div key={prof.id} className="p-4 border border-border rounded-xl bg-card">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-medium shrink-0"
+                  style={{ backgroundColor: prof.color || '#7C3AED' }}
+                >
+                  {prof.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground truncate">{prof.name}</p>
+                  <p className="text-sm text-muted-foreground">{ROLE_LABELS[prof.role]}</p>
+                  <p className="text-xs text-muted-foreground truncate">{prof.phone}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                {prof.isActive ? (
+                  <Badge variant="success">Ativo</Badge>
+                ) : (
+                  <Badge variant="outline">Inativo</Badge>
+                )}
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="text-primary hover:text-primary" onClick={() => openEdit(prof)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                    Editar
+                  </Button>
+                  {prof.role !== 'OWNER' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => handleRemove(prof)}
+                      loading={removingId === prof.id}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editing ? 'Editar profissional' : 'Adicionar profissional'}
+        description="Esses dados aparecem na agenda e no perfil público de agendamento."
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            label="Nome completo"
+            type="text"
+            required
+            minLength={2}
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          />
+          <Input
+            label="Telefone (WhatsApp)"
+            type="tel"
+            required
+            placeholder="11999999999"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Função</label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as ProfessionalInput['role'] }))}
+              className="w-full px-3 py-2 border border-input bg-background rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            >
+              <option value="PROFESSIONAL">Profissional</option>
+              <option value="ADMIN">Administrador</option>
+              <option value="RECEPTIONIST">Recepcionista</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Cor na agenda</label>
+              <input
+                type="color"
+                value={form.color || '#7C3AED'}
+                onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                className="h-10 w-full cursor-pointer rounded-lg border border-input bg-background"
+              />
+            </div>
+            <Input
+              label="Comissão (%)"
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              value={form.commission ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, commission: e.target.value ? Number(e.target.value) : undefined }))}
+            />
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            O telefone é usado pelo profissional para receber o código de acesso pelo WhatsApp (ou Telegram, se o
+            WhatsApp do sistema ainda não estiver conectado).
+          </p>
+
+          {formError && <p className="text-sm text-destructive">{formError}</p>}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" loading={saving}>
+              <Save className="w-4 h-4" />
+              {editing ? 'Salvar alterações' : 'Adicionar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function WhatsappTab() {
+  const [status, setStatus] = useState<WhatsAppStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showConfig, setShowConfig] = useState(false);
+
+  const loadStatus = () => {
+    setLoading(true);
+    whatsappApi
+      .getStatus()
+      .then(setStatus)
+      .catch(() => setStatus({ connected: false, state: 'unknown', connectedAt: null }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(loadStatus, []);
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {loading ? (
+        <p className="text-muted-foreground">Verificando conexão...</p>
+      ) : status?.connected ? (
+        <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-xl dark:bg-emerald-500/10 dark:border-emerald-500/20">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center">
+                <MessageCircle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-emerald-800 dark:text-emerald-400">WhatsApp Conectado</h3>
+                <p className="text-sm text-emerald-600 dark:text-emerald-400/80">
+                  {status.connectedAt
+                    ? `Conectado desde ${new Date(status.connectedAt).toLocaleString('pt-BR')}`
+                    : 'Instância ativa via Evolution API'}
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowConfig(true)}>
+              <Settings className="w-4 h-4" />
+              Gerenciar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-6 bg-amber-50 border border-amber-200 rounded-xl dark:bg-amber-500/10 dark:border-amber-500/20">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center">
+                <MessageCircle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-amber-800 dark:text-amber-400">WhatsApp desconectado</h3>
+                <p className="text-sm text-amber-600 dark:text-amber-400/80">
+                  Conecte para o negócio enviar e receber mensagens pelo WhatsApp automaticamente.
+                </p>
+              </div>
+            </div>
+            <Button variant="primary" size="sm" onClick={() => setShowConfig(true)}>
+              Ativar WhatsApp
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <p className="text-sm text-muted-foreground">
+        A conexão usa a Evolution API (evo2). Ao ativar, um QR Code é gerado para você escanear com o WhatsApp do
+        negócio — a partir daí, agendamentos, lembretes e a lista de espera são enviados automaticamente por lá.
+        Conversas e envio manual de mensagens ficam disponíveis na aba{' '}
+        <a href="/whatsapp" className="text-primary underline">
+          WhatsApp
+        </a>
+        .
+      </p>
+
+      <WhatsAppConfigModal
+        isOpen={showConfig}
+        onClose={() => {
+          setShowConfig(false);
+          loadStatus();
+        }}
+        onStatusChange={loadStatus}
+      />
     </div>
   );
 }

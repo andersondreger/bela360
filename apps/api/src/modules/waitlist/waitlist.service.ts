@@ -5,11 +5,20 @@ import { WaitlistStatus, DayPeriod } from '@prisma/client';
 
 // Validation schemas
 const createWaitlistSchema = z.object({
-  clientId: z.string().cuid(),
-  serviceId: z.string().cuid(),
-  professionalId: z.string().cuid().optional(),
+  clientId: z.string().min(1),
+  serviceId: z.string().min(1),
+  professionalId: z.string().min(1).optional(),
   desiredDate: z.string().transform(s => new Date(s)),
   desiredPeriod: z.nativeEnum(DayPeriod).optional(),
+  desiredTime: z.string().optional(),
+});
+
+const updateWaitlistSchema = z.object({
+  serviceId: z.string().min(1).optional(),
+  professionalId: z.string().min(1).nullable().optional(),
+  desiredDate: z.string().transform(s => new Date(s)).optional(),
+  desiredPeriod: z.nativeEnum(DayPeriod).optional(),
+  desiredTime: z.string().nullable().optional(),
 });
 
 export class WaitlistService {
@@ -104,6 +113,37 @@ export class WaitlistService {
       throw new AppError('Entrada não encontrada na lista de espera', 404);
     }
 
+    return entry;
+  }
+
+  /**
+   * Update a waitlist entry
+   */
+  async update(businessId: string, id: string, data: z.infer<typeof updateWaitlistSchema>) {
+    const existing = await prisma.waitlist.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Entrada não encontrada na lista de espera', 404);
+    }
+
+    const validated = updateWaitlistSchema.parse(data);
+
+    const entry = await prisma.waitlist.update({
+      where: { id },
+      data: {
+        ...(validated.serviceId && { serviceId: validated.serviceId }),
+        ...(validated.professionalId !== undefined && { professionalId: validated.professionalId }),
+        ...(validated.desiredDate && { desiredDate: validated.desiredDate }),
+        ...(validated.desiredPeriod && { desiredPeriod: validated.desiredPeriod }),
+        ...(validated.desiredTime !== undefined && { desiredTime: validated.desiredTime }),
+      },
+      include: {
+        client: { select: { id: true, name: true, phone: true } },
+        service: { select: { id: true, name: true, duration: true } },
+        professional: { select: { id: true, name: true } },
+      },
+    });
+
+    logger.info({ entryId: id }, 'Waitlist entry updated');
     return entry;
   }
 

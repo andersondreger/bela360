@@ -21,6 +21,9 @@ router.post('/', (req, res, next) => waitlistController.add(req, res, next));
 // Convert to appointment
 router.post('/:id/convert', (req, res, next) => waitlistController.convert(req, res, next));
 
+// Update entry
+router.put('/:id', (req, res, next) => waitlistController.update(req, res, next));
+
 // Remove from waitlist
 router.delete('/:id', (req, res, next) => waitlistController.remove(req, res, next));
 

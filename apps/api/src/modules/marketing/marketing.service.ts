@@ -32,13 +32,25 @@ const createCampaignSchema = z.object({
   // (ja filtrados pelo segmento na tela) em vez do segmento inteiro -
   // e o que permite o dono escolher aniversariante por aniversariante /
   // inativo por inativo em vez de mandar pra todo mundo do segmento de uma vez.
-  clientIds: z.array(z.string().cuid()).optional(),
+  clientIds: z.array(z.string().min(1)).optional(),
+});
+
+const createCreationSchema = z.object({
+  title: z.string().min(1).max(150),
+  imageUrl: z.string().url(),
+  background: z.string().max(60).optional(),
+  status: z.enum(['DRAFT', 'READY', 'PUBLISHED']).optional(),
+});
+
+const updateCreationSchema = z.object({
+  title: z.string().min(1).max(150).optional(),
+  status: z.enum(['DRAFT', 'READY', 'PUBLISHED']).optional(),
 });
 
 const clientRatingSchema = z.object({
-  clientId: z.string().cuid(),
-  appointmentId: z.string().cuid(),
-  professionalId: z.string().cuid(),
+  clientId: z.string().min(1),
+  appointmentId: z.string().min(1),
+  professionalId: z.string().min(1),
   rating: z.number().min(1).max(5),
   comment: z.string().optional(),
 });
@@ -586,6 +598,58 @@ export class MarketingService {
       birthdayMonth: segments[5].length,
       recurring: segments[6].length,
     };
+  }
+
+  /**
+   * List saved ad creations (visual history: rascunhos, prontas e publicadas)
+   */
+  async listCreations(businessId: string) {
+    return prisma.marketingCreation.findMany({
+      where: { businessId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Save an ad creation produced in the editor
+   */
+  async createCreation(businessId: string, data: z.infer<typeof createCreationSchema>) {
+    const validated = createCreationSchema.parse(data);
+    return prisma.marketingCreation.create({
+      data: {
+        businessId,
+        title: validated.title,
+        imageUrl: validated.imageUrl,
+        background: validated.background,
+        status: validated.status,
+      },
+    });
+  }
+
+  /**
+   * Update an ad creation (title/status)
+   */
+  async updateCreation(businessId: string, id: string, data: z.infer<typeof updateCreationSchema>) {
+    const existing = await prisma.marketingCreation.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Criação não encontrada', 404);
+    }
+    const validated = updateCreationSchema.parse(data);
+    return prisma.marketingCreation.update({
+      where: { id },
+      data: validated,
+    });
+  }
+
+  /**
+   * Delete an ad creation
+   */
+  async deleteCreation(businessId: string, id: string) {
+    const existing = await prisma.marketingCreation.findFirst({ where: { id, businessId } });
+    if (!existing) {
+      throw new AppError('Criação não encontrada', 404);
+    }
+    await prisma.marketingCreation.delete({ where: { id } });
   }
 }
 
