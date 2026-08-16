@@ -162,9 +162,19 @@ Depois disso, ainda vale configurar `/servicos` (o que o salão oferece) e
 
 Este é o número que o Anderson vai dedicar só pra este projeto. Ele **não
 tem tela no painel** — é set-up único via API, protegido por API key (não
-por login de usuário):
+por login de usuário).
+
+**Antes de rodar os comandos**: a chave não é uma senha à parte, é o mesmo
+valor de `EVOLUTION_API_KEY` já configurado no `.env` do backend (raiz do
+repo, na VPS de produção — `.env` é local, não fica no git). Copiar os
+comandos abaixo sem exportar essa variável primeiro dá `"API key invalida"`
+(testado ao vivo contra produção nesta correção — o endpoint funciona, só
+faltava deixar isso explícito). No servidor, dentro da pasta do projeto:
 
 ```bash
+# 0. Carregar a chave do .env pra variável do shell (uma vez por sessão de terminal)
+export EVOLUTION_API_KEY=$(grep -m1 '^EVOLUTION_API_KEY=' .env | cut -d= -f2-)
+
 # 1. Gerar o QR Code (cria a instância no evo2 se ainda não existir)
 curl -X POST "https://bela360.wayia.com.br/api/whatsapp/system/setup" \
   -H "x-api-key: $EVOLUTION_API_KEY"
@@ -179,10 +189,9 @@ curl "https://bela360.wayia.com.br/api/whatsapp/system/status?apiKey=$EVOLUTION_
 # connected: true quando o pareamento completar
 ```
 
-`EVOLUTION_API_KEY` é a mesma chave usada pra autenticar com a Evolution API
-no ambiente (variável de ambiente do backend, `apps/api`). Sem ela, os 3
-endpoints (`/whatsapp/system/setup`, `/system/status`, `/system/qrcode`)
-retornam 401.
+Sem essa variável (ou com o valor errado), os 3 endpoints
+(`/whatsapp/system/setup`, `/system/status`, `/system/qrcode`) retornam 401
+com `"API key invalida"` — o comando 0 acima é o que resolve isso.
 
 Assim que essa instância ficar `connected`, todo cadastro novo (Passo 1)
 volta a receber o OTP e a mensagem de boas-vindas direto no WhatsApp, sem
