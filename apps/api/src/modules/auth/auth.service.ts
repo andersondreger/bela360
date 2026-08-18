@@ -51,12 +51,23 @@ export class AuthService {
     return otp;
   }
 
+  private readonly DELIVERY_ALERT_COOLDOWN_SECONDS = 15 * 60;
+
   /**
    * Tenta mandar pelo WhatsApp institucional (instancia de sistema no
    * Evolution) primeiro; se a instancia nao estiver conectada ou o envio
    * falhar, cai pro Telegram (se o usuario ja tiver vinculado um chat, ver
    * linkTelegram). Nunca lanca erro pra quem chama - notificacao de OTP nao
    * pode derrubar login/cadastro so porque um canal de entrega falhou.
+   *
+   * Se os dois canais falharem (ou o usuario nem tiver Telegram vinculado),
+   * ninguem recebe o OTP e, sem alerta, isso so aparece se alguem for
+   * procurar nos logs (foi o que aconteceu em 2026-08-18: a instancia caiu e
+   * um cadastro ficou sem receber codigo em nenhum canal, silenciosamente).
+   * Por isso avisa os admins da plataforma pelo Telegram deles quando isso
+   * acontecer - vale pra qualquer usuario que peca OTP ou se cadastre, nao
+   * so pra um caso especifico, porque os dois lugares que chamam notifyUser
+   * (requestOTP e sendWelcomeOtp) passam por aqui.
    */
   private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
     try {
@@ -69,8 +80,59 @@ export class AuthService {
       );
     }
 
-    if (!user.telegramChatId) return;
-    await telegramClient.sendMessage(user.telegramChatId, text);
+    if (user.telegramChatId) {
+      try {
+        await telegramClient.sendMessage(user.telegramChatId, text);
+        return;
+      } catch (error) {
+        logger.error({ error, phone: user.phone }, 'Fallback Telegram tambem falhou');
+      }
+    }
+
+    await this.alertAdminsOfDeliveryFailure(user.phone);
+  }
+
+  /**
+   * Avisa os admins que um codigo/mensagem de sistema nao saiu por nenhum
+   * canal (WhatsApp institucional caido + sem Telegram de fallback pro
+   * usuario). Cooldown de 15min pra nao virar spam enquanto a instancia
+   * ficar fora do ar - um alerta ja e suficiente pra avisar que precisa
+   * reconectar o WhatsApp (ver Passo 5 do manual).
+   *
+   * Usa ADMIN_TELEGRAM_CHAT_ID (env) como destino principal - nenhuma conta
+   * com isSuperAdmin=true tem Telegram vinculado hoje (achado em
+   * 2026-08-18), entao depender so da flag deixaria o alerta sem
+   * destinatario. Superadmins com Telegram vinculado no futuro tambem
+   * recebem, sem precisar mexer aqui de novo.
+   */
+  private async alertAdminsOfDeliveryFailure(phone: string): Promise<void> {
+    const cooldownKey = 'otp:delivery-alert:cooldown';
+    if (await redis.get(cooldownKey)) return;
+    await redis.setex(cooldownKey, this.DELIVERY_ALERT_COOLDOWN_SECONDS, '1');
+
+    try {
+      const admins = await prisma.user.findMany({
+        where: { isSuperAdmin: true, telegramChatId: { not: null } },
+        select: { telegramChatId: true },
+      });
+
+      const chatIds = new Set(admins.map(admin => admin.telegramChatId as string));
+      if (env.ADMIN_TELEGRAM_CHAT_ID) chatIds.add(env.ADMIN_TELEGRAM_CHAT_ID);
+
+      if (chatIds.size === 0) {
+        logger.error({ phone }, 'Falha de entrega de OTP sem nenhum admin pra alertar (ADMIN_TELEGRAM_CHAT_ID nao configurado)');
+        return;
+      }
+
+      const alertText =
+        `⚠️ bela360: código/mensagem de sistema não saiu por WhatsApp nem Telegram ` +
+        `pro telefone ${phone}. O WhatsApp institucional provavelmente caiu - ` +
+        `verifique GET /api/whatsapp/system/status e reconecte se precisar.`;
+
+      await Promise.all([...chatIds].map(chatId => telegramClient.sendMessage(chatId, alertText)));
+    } catch (error) {
+      logger.error({ error, phone }, 'Falha ao alertar admins sobre falha de entrega de OTP');
+    }
   }
 
   /**

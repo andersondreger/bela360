@@ -32,6 +32,11 @@ const envSchema = z.object({
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
   TELEGRAM_BOT_USERNAME: z.string().default('Bela360bot'),
 
+  // Chat ID do Telegram do Anderson (dono da plataforma) pra alertas
+  // operacionais - independe de qual conta de usuario tem isSuperAdmin,
+  // porque nenhuma conta superadmin hoje tem Telegram vinculado.
+  ADMIN_TELEGRAM_CHAT_ID: z.string().optional(),
+
   // URLs
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   API_URL: z.string().url().default('http://localhost:3001'),
