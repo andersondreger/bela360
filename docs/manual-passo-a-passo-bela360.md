@@ -8,10 +8,11 @@ cliente no dia a dia). Todo campo, aba e comportamento abaixo foi conferido
 direto no código nesta data — onde algo não funciona de verdade, está
 marcado como **BUG conhecido**, não escondido.
 
-Contexto que motivou este documento: o Anderson vai configurar um número de
+Contexto que motivou este documento: o Anderson configurou um número de
 WhatsApp **exclusivo pra este projeto** (a instância institucional que manda
-código de acesso e boas-vindas pra clientes novos — hoje ainda não conectada
-em produção). O Passo 5 documenta exatamente como conectar esse número.
+código de acesso e boas-vindas pra clientes novos — conectada em produção
+desde 2026-08-18, número 45991115540). O Passo 5 documenta exatamente como
+foi conectado e como reconectar se cair de novo.
 
 ## Visão geral
 
@@ -27,7 +28,7 @@ bela360, não confundir uma com a outra:
 
 | Instância | Nome no evo2 | Serve pra | Onde se conecta |
 |---|---|---|---|
-| **Sistema (institucional)** | `bela360_system` | Enviar o código de acesso (OTP) e a mensagem de boas-vindas pra **todo cliente novo** que se cadastra, de qualquer salão | Só via API (Passo 5) — não tem tela no painel |
+| **Sistema (institucional)** | `bela360` (número 45991115540, ver Passo 5) | Enviar o código de acesso (OTP) e a mensagem de boas-vindas pra **todo cliente novo** que se cadastra, de qualquer salão | Só via API (Passo 5) — não tem tela no painel |
 | **Atendimento do salão** | `bela360_<slug-do-salão>` | Agendamento, lembretes e lista de espera de **um salão específico** com clientes dele | `/configuracoes` → aba WhatsApp (Passo 4.6), uma por salão |
 
 ---
@@ -67,11 +68,11 @@ progresso (Seu salão → Você → Pronto):
 
 Ao enviar (`POST /public/business/onboarding`), a conta é criada e aparece a
 tela "Salão cadastrado!" dizendo que o código de acesso já foi gerado para o
-telefone informado. Nessa tela, o bela360 já tenta gerar na hora um link de
-vínculo do Telegram (`POST /auth/telegram/link`) e mostra um botão **"Abrir
-o Telegram e receber o código"** — hoje esse é o caminho mais confiável de
-receber o OTP, porque `bela360_system` (WhatsApp institucional) ainda não
-está conectado em produção (ver Passo 5). Se o link do Telegram falhar por
+telefone informado. O OTP sai primeiro pelo WhatsApp institucional (`bela360`,
+ver Passo 5); se esse envio falhar, o backend cai pro Telegram — a tela
+também já tenta gerar na hora um link de vínculo do Telegram
+(`POST /auth/telegram/link`) e mostra um botão **"Abrir o Telegram e receber
+o código"** como caminho alternativo. Se o link do Telegram falhar por
 qualquer motivo, tem um link secundário "Já recebi o código, ir para o
 login".
 
@@ -158,11 +159,16 @@ envio manual ficam na aba **WhatsApp** do menu principal (Passo 7).
 Depois disso, ainda vale configurar `/servicos` (o que o salão oferece) e
 `/estoque` (se o módulo Estoque já estiver liberado no Passo 4.3).
 
-## Passo 5 — Conectar o WhatsApp institucional (`bela360_system`)
+## Passo 5 — Conectar o WhatsApp institucional (`bela360`)
 
-Este é o número que o Anderson vai dedicar só pra este projeto. Ele **não
-tem tela no painel** — é set-up único via API, protegido por API key (não
-por login de usuário).
+Este é o número que o Anderson dedicou só pra este projeto: **45991115540**,
+instância `bela360` no evo2 (nome vem de `EVOLUTION_INSTANCE_NAME` no
+`.env`, é o mesmo valor usado pelo `SYSTEM_INSTANCE_NAME` no código — trocar
+um sem trocar o outro faz o setup criar uma instância nova e o webhook parar
+de bater). Esse número também é usado como cliente real de teste (ver
+Passo 6) pra validar o fluxo OTP ponta a ponta. Ele **não tem tela no
+painel** — é set-up único via API, protegido por API key (não por login de
+usuário).
 
 **Antes de rodar os comandos**: a chave não é uma senha à parte, é o mesmo
 valor de `EVOLUTION_API_KEY` já configurado no `.env` do backend (raiz do
@@ -178,7 +184,7 @@ export EVOLUTION_API_KEY=$(grep -m1 '^EVOLUTION_API_KEY=' .env | cut -d= -f2-)
 # 1. Gerar o QR Code (cria a instância no evo2 se ainda não existir)
 curl -X POST "https://bela360.wayia.com.br/api/whatsapp/system/setup" \
   -H "x-api-key: $EVOLUTION_API_KEY"
-# resposta: { data: { instanceName: "bela360_system", qrcode, status: "awaiting_scan" } }
+# resposta: { data: { instanceName: "bela360", qrcode, status: "awaiting_scan" } }
 
 # 2. Escanear o QR retornado (campo qrcode, base64) com o WhatsApp escolhido,
 #    igual ao fluxo normal do WhatsApp Web — precisa ser escaneado rápido,
@@ -194,9 +200,13 @@ Sem essa variável (ou com o valor errado), os 3 endpoints
 com `"API key invalida"` — o comando 0 acima é o que resolve isso.
 
 Assim que essa instância ficar `connected`, todo cadastro novo (Passo 1)
-volta a receber o OTP e a mensagem de boas-vindas direto no WhatsApp, sem
-precisar do fallback do Telegram — e o mesmo vale pro OTP de login (Passo
-2) e pro convite de profissionais novos (Passo 4.5).
+passa a receber o OTP e a mensagem de boas-vindas direto no WhatsApp — e o
+mesmo vale pro OTP de login (Passo 2) e pro convite de profissionais novos
+(Passo 4.5). O código (`AuthService.notifyUser`, `apps/api/src/modules/auth/auth.service.ts`)
+tenta o WhatsApp institucional primeiro; só cai pro Telegram (se o usuário
+já tiver vinculado um chat) quando o envio falhar — então o Telegram nunca
+mais é o único canal enquanto `bela360` estiver conectado, mas continua
+funcionando como fallback se o número cair.
 
 **Cuidado ao escolher o número**: se o número já estiver vinculado a outras
 instâncias no mesmo servidor Evolution, o pareamento pode travar em
@@ -250,7 +260,7 @@ Desde, Aniversário e Observações (se preenchida). Dois atalhos de ação:
 
 ## Checklist resumido
 
-- [ ] `bela360_system` conectado via `POST /whatsapp/system/setup` (Passo 5) — pré-requisito pro OTP/boas-vindas sair por WhatsApp em vez de só Telegram
+- [x] `bela360` (instância institucional) conectado (Passo 5, 45991115540) — pré-requisito pro OTP/boas-vindas sair por WhatsApp em vez de só Telegram
 - [ ] Cliente (dono do salão) preenche `/onboarding` (Passo 1)
 - [ ] Login testado — OTP chegando por WhatsApp ou Telegram (Passo 2)
 - [ ] Aba Negócio e Marca configuradas (Passo 4.1–4.2)
@@ -264,9 +274,10 @@ Desde, Aniversário e Observações (se preenchida). Dois atalhos de ação:
 
 - **Aba Horários (`/configuracoes`) não salva nada** — botão sem ação, só
   UI estática (Passo 4.4).
-- **`bela360_system` (WhatsApp institucional) sem conectar em produção** até
-  a data deste documento — motivo pelo qual o cadastro depende do fallback
-  do Telegram.
+- **`bela360` (WhatsApp institucional, número 45991115540)** — instância
+  criada em produção em 2026-08-17, aguardando o QR ser escaneado. Até isso
+  acontecer, `notifyUser` tenta o envio, falha, e cai pro fallback do
+  Telegram automaticamente (comportamento esperado, não é bug).
 
 ## Ver também
 

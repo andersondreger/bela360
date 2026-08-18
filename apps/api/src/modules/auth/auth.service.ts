@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { prisma, redis, logger, env } from '../../config';
 import { telegramClient } from '../telegram/telegram.client';
+import { getSystemWhatsAppService } from '../whatsapp/whatsapp.service';
 import { AppError } from '../../common/errors';
 import { verifyPassword, hashPassword } from '../../common/password';
 
@@ -51,13 +52,23 @@ export class AuthService {
   }
 
   /**
-   * Manda a mensagem pelo Telegram se o usuario ja tiver vinculado um chat
-   * (ver linkTelegram). A instancia de sistema do WhatsApp saiu do Evolution
-   * e o lancamento atual e Telegram-only - se ainda nao houver chat
-   * vinculado, o codigo fica so no Redis/banco ate o usuario vincular
-   * (fluxo de /telegram/link na tela de login ou onboarding).
+   * Tenta mandar pelo WhatsApp institucional (instancia de sistema no
+   * Evolution) primeiro; se a instancia nao estiver conectada ou o envio
+   * falhar, cai pro Telegram (se o usuario ja tiver vinculado um chat, ver
+   * linkTelegram). Nunca lanca erro pra quem chama - notificacao de OTP nao
+   * pode derrubar login/cadastro so porque um canal de entrega falhou.
    */
   private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
+    try {
+      await getSystemWhatsAppService().sendText({ number: user.phone, text });
+      return;
+    } catch (error) {
+      logger.warn(
+        { error, phone: user.phone },
+        'WhatsApp institucional indisponivel, usando fallback Telegram'
+      );
+    }
+
     if (!user.telegramChatId) return;
     await telegramClient.sendMessage(user.telegramChatId, text);
   }
