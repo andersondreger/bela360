@@ -50,7 +50,7 @@ export class AuthController {
       res.json({
         success: true,
         data: {
-          message: 'Código enviado para seu WhatsApp',
+          message: 'Código de acesso gerado',
           expiresIn: result.expiresIn,
         },
       });

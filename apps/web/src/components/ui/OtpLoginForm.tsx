@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { KeyRound, Lock, Phone, Send } from 'lucide-react';
 import { Button } from './Button';
@@ -54,6 +54,16 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
       setLinkingTelegram(false);
     }
   };
+
+  // Busca o link do Telegram assim que o código é solicitado, em vez de
+  // esperar o usuário notar que o WhatsApp não chegou e clicar em algo -
+  // hoje o Telegram é o canal que garante entrega.
+  useEffect(() => {
+    if (step === 'otp' && !telegramLink) {
+      handleTelegramLink();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const handlePasswordLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -165,7 +175,7 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
             }}
             className="w-full text-center text-sm font-medium text-primary hover:underline"
           >
-            Entrar com código do WhatsApp
+            Entrar com código de acesso
           </button>
         </form>
       </motion.div>
@@ -177,7 +187,7 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
       {step === 'phone' ? (
         <form onSubmit={handleRequestOTP} className="space-y-4">
           <Input
-            label="Telefone (WhatsApp)"
+            label="Telefone"
             type="tel"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
@@ -210,7 +220,28 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
         </form>
       ) : (
         <form onSubmit={handleVerifyOTP} className="space-y-4">
-          <p className="text-sm text-muted-foreground">Enviamos um código para {phone}</p>
+          <p className="text-sm text-muted-foreground">Seu código de acesso foi gerado para {phone}.</p>
+
+          {telegramLink ? (
+            <a href={telegramLink} target="_blank" rel="noopener noreferrer" className="block">
+              <Button type="button" className="w-full" size="lg">
+                <Send className="h-4 w-4" />
+                Abrir o Telegram e receber o código
+              </Button>
+            </a>
+          ) : (
+            <Button
+              type="button"
+              className="w-full"
+              size="lg"
+              loading={linkingTelegram}
+              onClick={handleTelegramLink}
+            >
+              <Send className="h-4 w-4" />
+              Receber o código pelo Telegram
+            </Button>
+          )}
+
           <Input
             label="Código de 6 dígitos"
             value={otp}
@@ -237,27 +268,6 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
           >
             Usar outro número
           </button>
-
-          {telegramLink ? (
-            <a
-              href={telegramLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-2 text-sm font-medium text-primary hover:underline"
-            >
-              <Send className="h-3.5 w-3.5" />
-              Abrir o Telegram e receber o código por lá
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={handleTelegramLink}
-              disabled={linkingTelegram}
-              className="w-full text-center text-xs text-muted-foreground hover:underline"
-            >
-              Não chegou o WhatsApp? Receber o código pelo Telegram
-            </button>
-          )}
         </form>
       )}
     </motion.div>

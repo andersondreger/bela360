@@ -60,14 +60,18 @@ export class AuthService {
    * linkTelegram). Nunca lanca erro pra quem chama - notificacao de OTP nao
    * pode derrubar login/cadastro so porque um canal de entrega falhou.
    *
-   * Se os dois canais falharem (ou o usuario nem tiver Telegram vinculado),
-   * ninguem recebe o OTP e, sem alerta, isso so aparece se alguem for
-   * procurar nos logs (foi o que aconteceu em 2026-08-18: a instancia caiu e
-   * um cadastro ficou sem receber codigo em nenhum canal, silenciosamente).
-   * Por isso avisa os admins da plataforma pelo Telegram deles quando isso
-   * acontecer - vale pra qualquer usuario que peca OTP ou se cadastre, nao
-   * so pra um caso especifico, porque os dois lugares que chamam notifyUser
-   * (requestOTP e sendWelcomeOtp) passam por aqui.
+   * Se o usuario ainda nao vinculou Telegram, nao ha "canal de fallback" pra
+   * tentar - isso e o caminho normal enquanto o WhatsApp institucional
+   * estiver fora do ar (numero bloqueado em 2026-08-18): a pessoa recebe o
+   * codigo assim que abrir o link do bot (botao "Abrir o Telegram e receber
+   * o codigo" no cadastro/login, que dispara requestTelegramLink ->
+   * relayPendingOtp). Isso NAO e alertavel, e o fluxo esperado pra todo
+   * cadastro novo.
+   *
+   * So alerta o admin quando o usuario JA tinha Telegram vinculado (deveria
+   * ter recebido automaticamente) e mesmo assim os dois canais falharam -
+   * isso sim e uma falha de infraestrutura de verdade (bot token invalido,
+   * Telegram fora do ar, etc), nao o "ainda nao vinculei" esperado.
    */
   private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
     try {
@@ -80,24 +84,21 @@ export class AuthService {
       );
     }
 
-    if (user.telegramChatId) {
-      try {
-        await telegramClient.sendMessage(user.telegramChatId, text);
-        return;
-      } catch (error) {
-        logger.error({ error, phone: user.phone }, 'Fallback Telegram tambem falhou');
-      }
-    }
+    if (!user.telegramChatId) return;
 
-    await this.alertAdminsOfDeliveryFailure(user.phone);
+    try {
+      await telegramClient.sendMessage(user.telegramChatId, text);
+    } catch (error) {
+      logger.error({ error, phone: user.phone }, 'Fallback Telegram tambem falhou');
+      await this.alertAdminsOfDeliveryFailure(user.phone);
+    }
   }
 
   /**
-   * Avisa os admins que um codigo/mensagem de sistema nao saiu por nenhum
-   * canal (WhatsApp institucional caido + sem Telegram de fallback pro
-   * usuario). Cooldown de 15min pra nao virar spam enquanto a instancia
-   * ficar fora do ar - um alerta ja e suficiente pra avisar que precisa
-   * reconectar o WhatsApp (ver Passo 5 do manual).
+   * Avisa os admins que um usuario com Telegram ja vinculado nao recebeu um
+   * codigo/mensagem de sistema por nenhum canal - falha de infraestrutura
+   * de verdade, nao o "usuario ainda nao vinculou Telegram" esperado.
+   * Cooldown de 15min pra nao virar spam se o problema persistir.
    *
    * Usa ADMIN_TELEGRAM_CHAT_ID (env) como destino principal - nenhuma conta
    * com isSuperAdmin=true tem Telegram vinculado hoje (achado em
@@ -125,9 +126,9 @@ export class AuthService {
       }
 
       const alertText =
-        `⚠️ bela360: código/mensagem de sistema não saiu por WhatsApp nem Telegram ` +
-        `pro telefone ${phone}. O WhatsApp institucional provavelmente caiu - ` +
-        `verifique GET /api/whatsapp/system/status e reconecte se precisar.`;
+        `⚠️ bela360: usuário ${phone} já tinha Telegram vinculado mas não recebeu ` +
+        `o código/mensagem de sistema por nenhum canal (WhatsApp e Telegram falharam). ` +
+        `Verifique se o bot Telegram está respondendo.`;
 
       await Promise.all([...chatIds].map(chatId => telegramClient.sendMessage(chatId, alertText)));
     } catch (error) {
