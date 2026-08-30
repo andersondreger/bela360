@@ -233,7 +233,7 @@ export default function HomePage() {
 
           <div
             data-hero-exit
-            className="relative mx-auto w-full max-w-sm lg:max-w-[380px]"
+            className="relative mx-auto w-full max-w-md lg:max-w-[460px]"
             style={{ perspective: '1400px' }}
           >
             <div data-hero-parallax className="relative">
@@ -259,11 +259,11 @@ export default function HomePage() {
 
               <div data-hero-image className="relative aspect-[4/5] w-full">
                 <Image
-                  src="/images/landing/hero-ana.png"
+                  src="/images/landing/hero-ana-v4.png"
                   alt="Ana, a assistente de IA do bela360, pronta para atender seu salão"
                   fill
                   priority
-                  sizes="(max-width: 1024px) 70vw, 380px"
+                  sizes="(max-width: 1024px) 80vw, 460px"
                   className="object-contain object-bottom drop-shadow-[0_25px_45px_rgba(0,0,0,0.5)]"
                 />
               </div>
