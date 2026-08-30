@@ -233,7 +233,7 @@ export default function HomePage() {
 
           <div
             data-hero-exit
-            className="relative mx-auto w-full max-w-lg lg:max-w-[620px] lg:translate-x-4"
+            className="relative mx-auto w-full max-w-lg lg:max-w-[620px]"
             style={{ perspective: '1400px' }}
           >
             <div data-hero-parallax className="relative">
