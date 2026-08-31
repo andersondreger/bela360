@@ -1,8 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { motion } from 'framer-motion';
-import { KeyRound, Lock, Phone, Send } from 'lucide-react';
+import { KeyRound, Lock, Phone } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -26,10 +26,9 @@ function formatPhone(value: string) {
 }
 
 export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
-  // OTP é o caminho padrão: toda conta nova (site ou /cadastrar no Telegram)
-  // nasce sem senha, então a aba de senha só serve pra quem já definiu uma
-  // manualmente. Começar em 'password' fazia todo mundo cair num "inválido"
-  // sem entender por quê.
+  // OTP é o caminho padrão: toda conta nova nasce sem senha, então a aba de
+  // senha só serve pra quem já definiu uma manualmente. Começar em 'password'
+  // fazia todo mundo cair num "inválido" sem entender por quê.
   const [mode, setMode] = useState<'otp' | 'password'>('otp');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
@@ -37,33 +36,6 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [telegramLink, setTelegramLink] = useState('');
-  const [linkingTelegram, setLinkingTelegram] = useState(false);
-
-  const handleTelegramLink = async () => {
-    setLinkingTelegram(true);
-    try {
-      const res = await fetch('/api/auth/telegram/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, '') }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) setTelegramLink(data.data.link);
-    } finally {
-      setLinkingTelegram(false);
-    }
-  };
-
-  // Busca o link do Telegram assim que o código é solicitado, em vez de
-  // esperar o usuário notar que o WhatsApp não chegou e clicar em algo -
-  // hoje o Telegram é o canal que garante entrega.
-  useEffect(() => {
-    if (step === 'otp' && !telegramLink) {
-      handleTelegramLink();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
 
   const handlePasswordLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -220,27 +192,9 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
         </form>
       ) : (
         <form onSubmit={handleVerifyOTP} className="space-y-4">
-          <p className="text-sm text-muted-foreground">Seu código de acesso foi gerado para {phone}.</p>
-
-          {telegramLink ? (
-            <a href={telegramLink} target="_blank" rel="noopener noreferrer" className="block">
-              <Button type="button" className="w-full" size="lg">
-                <Send className="h-4 w-4" />
-                Abrir o Telegram e receber o código
-              </Button>
-            </a>
-          ) : (
-            <Button
-              type="button"
-              className="w-full"
-              size="lg"
-              loading={linkingTelegram}
-              onClick={handleTelegramLink}
-            >
-              <Send className="h-4 w-4" />
-              Receber o código pelo Telegram
-            </Button>
-          )}
+          <p className="text-sm text-muted-foreground">
+            Enviamos seu código de acesso por WhatsApp para {phone}.
+          </p>
 
           <Input
             label="Código de 6 dígitos"
@@ -257,17 +211,42 @@ export function OtpLoginForm({ onVerified }: OtpLoginFormProps) {
             <KeyRound className="h-4 w-4" />
             Entrar
           </Button>
-          <button
-            type="button"
-            onClick={() => {
-              setStep('phone');
-              setOtp('');
-              setError('');
-            }}
-            className="w-full text-center text-sm font-medium text-primary hover:underline"
-          >
-            Usar outro número
-          </button>
+          <div className="flex items-center justify-between text-sm font-medium text-primary">
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                setLoading(true);
+                try {
+                  const res = await fetch('/api/auth/otp/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phone.replace(/\D/g, '') }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error?.message || 'Erro ao reenviar código');
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Erro ao reenviar código');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="hover:underline"
+            >
+              Reenviar código
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('phone');
+                setOtp('');
+                setError('');
+              }}
+              className="hover:underline"
+            >
+              Usar outro número
+            </button>
+          </div>
         </form>
       )}
     </motion.div>

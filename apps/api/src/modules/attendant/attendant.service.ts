@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Redis } from 'ioredis';
 import { env, logger } from '../../config';
-import { getSystemWhatsAppService } from '../whatsapp/whatsapp.service';
+import { getSupportWhatsAppService } from '../whatsapp/whatsapp.service';
 import { telegramClient } from '../telegram/telegram.client';
 
 const redis = new Redis(env.REDIS_URL || 'redis://localhost:6379');
@@ -13,7 +13,7 @@ const HISTORY_MAX_MESSAGES = 20;
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 export type AttendantChannel = 'whatsapp' | 'telegram';
 
-const SYSTEM_PROMPT = `Você é a Ana, atendente comercial do bela360 pelo WhatsApp e Telegram.
+const SYSTEM_PROMPT = `Você é a Ana, atendente comercial do bela360 pelo WhatsApp.
 
 O bela360 é um sistema de automação para salões, barbearias, clínicas de estética e spas. Recursos reais do produto, não invente nada além disso:
 - Agendamento pelo WhatsApp: o cliente final marca horário direto conversando com o número do salão.
@@ -25,9 +25,9 @@ O bela360 é um sistema de automação para salões, barbearias, clínicas de es
 - Cada negócio fica isolado no sistema — dado de um salão não aparece pra outro.
 - Onboarding: cadastro leva menos de 2 minutos (nome do negócio + telefone), depois é só escanear um QR Code do WhatsApp e o bela360 já começa a atender.
 
-Sobre preço: você não tem uma tabela de planos pra citar. Se perguntarem, diga que o cadastro inicial é gratuito (é a chamada "Cadastre seu salão grátis" do site) e que pra falar de plano pago o ideal é continuar com um humano — nunca invente valor.
+Sobre preço e teste: o cadastro é gratuito e todo salão novo começa com 7 dias com TODOS os recursos liberados, sem cartão de crédito. Depois dos 7 dias, agenda, clientes e financeiro continuam liberados de graça; os recursos premium (marketing, automação, campanhas de fidelidade e controle de estoque) passam a exigir o plano de R$ 97/mês. Pode citar esse valor à vontade. Se pedirem desconto, condição especial ou negociação, diga que vai chamar alguém do time.
 
-Seu objetivo: tirar dúvida de dono de salão/barbearia/clínica que chegou pelo site ou pelo Telegram, explicar como o bela360 funciona, e incentivar o cadastro gratuito quando fizer sentido. Seja direta, calorosa, em português do Brasil, sem emoji em excesso. Respostas curtas — isso é WhatsApp/Telegram, não e-mail. Se a pergunta fugir do que você sabe sobre o bela360, ou pedirem preço fechado/negociação, diga que vai chamar alguém do time pra continuar.`;
+Seu objetivo: tirar dúvida de dono de salão/barbearia/clínica que chegou pelo site, explicar como o bela360 funciona, e incentivar o cadastro gratuito quando fizer sentido. Seja direta, calorosa, em português do Brasil, sem emoji em excesso. Respostas curtas — isso é WhatsApp, não e-mail. Se a pergunta fugir do que você sabe sobre o bela360, ou pedirem preço fechado/negociação, diga que vai chamar alguém do time pra continuar.`;
 
 function historyKey(channel: AttendantChannel, externalId: string): string {
   return `attendant:history:${channel}:${externalId}`;
@@ -51,7 +51,7 @@ async function appendHistory(channel: AttendantChannel, externalId: string, mess
 
 async function sendReply(channel: AttendantChannel, externalId: string, text: string): Promise<void> {
   if (channel === 'whatsapp') {
-    await getSystemWhatsAppService().sendText({ number: externalId, text });
+    await getSupportWhatsAppService().sendText({ number: externalId, text });
   } else {
     await telegramClient.sendMessage(externalId, text);
   }
@@ -65,10 +65,10 @@ async function sendReply(channel: AttendantChannel, externalId: string, text: st
 export async function handleAttendantMessage(channel: AttendantChannel, externalId: string, text: string): Promise<void> {
   const history = await getHistory(channel, externalId);
 
-  const system =
-    channel === 'telegram'
-      ? `${SYSTEM_PROMPT}\n\nEssa conversa é pelo Telegram. Se a pessoa quiser se cadastrar, diga pra mandar o comando /cadastrar que o próprio bot já faz o cadastro completo ali na hora, sem precisar abrir o site.`
-      : SYSTEM_PROMPT;
+  // O canal de cliente é só o WhatsApp. O Telegram continua existindo apenas
+  // como canal de alerta interno pro admin, mas se cair uma mensagem avulsa
+  // no bot a Ana responde com o mesmo prompt, sem instruções específicas.
+  const system = SYSTEM_PROMPT;
 
   try {
     const response = await anthropic.messages.create({

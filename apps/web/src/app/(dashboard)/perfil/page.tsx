@@ -620,7 +620,7 @@ export default function PerfilPage() {
                 {currentUser?.hasPassword ? 'Trocar senha' : 'Definir senha'}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Você também pode sempre entrar recebendo um código de acesso pelo WhatsApp/Telegram, sem precisar de senha.
+                Você também pode sempre entrar recebendo um código de acesso pelo WhatsApp, sem precisar de senha.
               </p>
             </form>
           </div>

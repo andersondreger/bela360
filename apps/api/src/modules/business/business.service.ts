@@ -1,9 +1,10 @@
 import { prisma, logger } from '../../config';
-import { BusinessType, UserRole, DayOfWeek } from '@prisma/client';
+import { BusinessType, UserRole, DayOfWeek, Prisma } from '@prisma/client';
 import { AppError } from '../../common/errors';
 import { agentesService } from '../agentes';
 import { automationService } from '../automation/automation.service';
 import { authService } from '../auth/auth.service';
+import { withTrialUnlock } from '../platform/plan';
 
 interface CreateBusinessDTO {
   name: string;
@@ -92,7 +93,11 @@ export class BusinessService {
         city: data.city,
         state: data.state,
         zipCode: data.zipCode,
-        settings: {
+        // Todo salão novo entra com 7 dias de TODOS os recursos premium
+        // liberados (withTrialUnlock grava a expiry por módulo + o carimbo
+        // em settings.trial). Passados os 7 dias, isModuleUnlocked bloqueia
+        // sozinho — só a data importa — até o negócio assinar o plano.
+        settings: withTrialUnlock({
           appointmentBuffer: 15, // minutes between appointments
           maxAdvanceBooking: 30, // days
           minAdvanceBooking: 1, // hours
@@ -100,7 +105,7 @@ export class BusinessService {
           autoConfirm: false,
           sendReminders: true,
           reminderHours: 24,
-        },
+        }) as Prisma.InputJsonValue,
         users: {
           create: {
             name: data.ownerName,

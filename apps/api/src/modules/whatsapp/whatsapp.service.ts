@@ -287,8 +287,23 @@ export function getWhatsAppService(instanceName: string): WhatsAppService {
 
 // Global system instance for OTP and system messages
 const SYSTEM_INSTANCE_NAME = env.EVOLUTION_INSTANCE_NAME;
-let systemWhatsAppService: WhatsAppService | null = null;
 
+// Dois papeis de numero de sistema:
+//  - OUTREACH: dispara a 1a mensagem (prospeccao, boas-vindas, OTP de login)
+//    — o numero pessoal do Anderson.
+//  - SUPPORT: atende o cliente depois (Ana respondendo mensagens que chegam)
+//    — o numero institucional da Bela.
+// Enquanto os dois env especificos nao forem preenchidos, ambos caem no
+// EVOLUTION_INSTANCE_NAME, entao hoje isso roda com um numero so sem
+// precisar refatorar quando o segundo numero entrar.
+const OUTREACH_INSTANCE_NAME = env.EVOLUTION_OUTREACH_INSTANCE_NAME || SYSTEM_INSTANCE_NAME;
+const SUPPORT_INSTANCE_NAME = env.EVOLUTION_SUPPORT_INSTANCE_NAME || SYSTEM_INSTANCE_NAME;
+
+let systemWhatsAppService: WhatsAppService | null = null;
+let outreachWhatsAppService: WhatsAppService | null = null;
+let supportWhatsAppService: WhatsAppService | null = null;
+
+/** @deprecated use getOutreachWhatsAppService (1a msg/OTP) ou getSupportWhatsAppService (atendimento) */
 export function getSystemWhatsAppService(): WhatsAppService {
   if (!systemWhatsAppService) {
     systemWhatsAppService = new WhatsAppService(SYSTEM_INSTANCE_NAME);
@@ -296,4 +311,36 @@ export function getSystemWhatsAppService(): WhatsAppService {
   return systemWhatsAppService;
 }
 
-export { SYSTEM_INSTANCE_NAME };
+/** Numero que dispara a 1a mensagem: prospeccao, boas-vindas e OTP de login. */
+export function getOutreachWhatsAppService(): WhatsAppService {
+  if (!outreachWhatsAppService) {
+    outreachWhatsAppService = new WhatsAppService(OUTREACH_INSTANCE_NAME);
+  }
+  return outreachWhatsAppService;
+}
+
+/** Numero de atendimento da Bela: Ana respondendo mensagens que chegam. */
+export function getSupportWhatsAppService(): WhatsAppService {
+  if (!supportWhatsAppService) {
+    supportWhatsAppService = new WhatsAppService(SUPPORT_INSTANCE_NAME);
+  }
+  return supportWhatsAppService;
+}
+
+export { SYSTEM_INSTANCE_NAME, OUTREACH_INSTANCE_NAME, SUPPORT_INSTANCE_NAME };
+
+// Papeis de numero de sistema, pros endpoints de setup/QR conectarem cada
+// um separadamente (?role=outreach|support|system).
+export type SystemInstanceRole = 'system' | 'outreach' | 'support';
+
+export function getSystemWhatsAppServiceForRole(role: SystemInstanceRole): WhatsAppService {
+  if (role === 'outreach') return getOutreachWhatsAppService();
+  if (role === 'support') return getSupportWhatsAppService();
+  return getSystemWhatsAppService();
+}
+
+export function systemInstanceNameForRole(role: SystemInstanceRole): string {
+  if (role === 'outreach') return OUTREACH_INSTANCE_NAME;
+  if (role === 'support') return SUPPORT_INSTANCE_NAME;
+  return SYSTEM_INSTANCE_NAME;
+}

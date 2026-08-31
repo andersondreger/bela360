@@ -43,6 +43,14 @@ function SplitWords({ text, wordClassName }: { text: string; wordClassName?: str
   );
 }
 
+// Número de atendimento da Bela no WhatsApp (E.164 sem "+"). Fallback = o
+// mesmo número que aparece no rodapé. O cliente fala com a gente só por aqui;
+// não usamos mais Telegram pra atendimento.
+const SUPPORT_WHATSAPP = process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP || '5545991397543';
+const SUPPORT_WHATSAPP_URL = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(
+  'Oi! Quero saber mais sobre o bela360 pro meu salão.'
+)}`;
+
 const CAPABILITIES = [
   {
     icon: MessageCircle,
@@ -227,7 +235,7 @@ export default function HomePage() {
               </Link>
             </div>
             <p className="mt-6 text-xs text-white/40">
-              Sem cartão de crédito. Comece a usar em menos de 2 minutos.
+              7 dias com todos os recursos liberados. Sem cartão de crédito.
             </p>
           </div>
 
@@ -518,9 +526,9 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <a href="https://t.me/Bela360bot" target="_blank" rel="noopener noreferrer">
+            <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                Falar com a gente no Telegram
+                Falar com a gente no WhatsApp
               </Button>
             </a>
           </div>

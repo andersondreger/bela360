@@ -1,7 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma, logger, env } from '../../config';
-import { getWhatsAppService, getSystemWhatsAppService, SYSTEM_INSTANCE_NAME } from './whatsapp.service';
+import {
+  getWhatsAppService,
+  getSystemWhatsAppServiceForRole,
+  systemInstanceNameForRole,
+  SYSTEM_INSTANCE_NAME,
+  SUPPORT_INSTANCE_NAME,
+  type SystemInstanceRole,
+} from './whatsapp.service';
 import { messageQueue } from './whatsapp.queue';
 import { parseWebhookMessage, isGroupMessage } from './whatsapp.utils';
 import { handleAttendantMessage } from '../attendant';
@@ -24,6 +31,13 @@ function requireSystemApiKey(req: Request): void {
   }
 }
 
+// ?role=outreach (numero da 1a mensagem) | support (atendimento da Bela) |
+// system (default, compat). Cada papel tem sua propria instancia no Evolution.
+function systemRole(req: Request): SystemInstanceRole {
+  const role = String(req.query.role || 'system');
+  return role === 'outreach' || role === 'support' ? role : 'system';
+}
+
 export class WhatsAppController {
   /**
    * Setup system WhatsApp instance (for OTP and system messages)
@@ -36,7 +50,8 @@ export class WhatsAppController {
         throw new AppError('API key invalida', 401);
       }
 
-      const systemWhatsApp = getSystemWhatsAppService();
+      const role = systemRole(req);
+      const systemWhatsApp = getSystemWhatsAppServiceForRole(role);
 
       // Create instance if not exists
       await systemWhatsApp.createInstance();
@@ -51,13 +66,21 @@ export class WhatsAppController {
       // Get QR code
       const qrcode = await systemWhatsApp.getQRCode();
 
+      const message =
+        role === 'outreach'
+          ? 'Escaneie com o WhatsApp que dispara a 1a mensagem (prospeccao + boas-vindas + OTP)'
+          : role === 'support'
+            ? 'Escaneie com o WhatsApp de atendimento da Bela (Ana responde os clientes por ele)'
+            : 'Escaneie o QR Code com o WhatsApp que sera usado para enviar OTPs do sistema';
+
       res.json({
         success: true,
         data: {
-          instanceName: SYSTEM_INSTANCE_NAME,
+          role,
+          instanceName: systemInstanceNameForRole(role),
           qrcode,
           status: 'awaiting_scan',
-          message: 'Escaneie o QR Code com o WhatsApp que sera usado para enviar OTPs do sistema',
+          message,
         },
       });
     } catch (error) {
@@ -75,14 +98,16 @@ export class WhatsAppController {
       return next(error);
     }
 
+    const role = systemRole(req);
     try {
-      const systemWhatsApp = getSystemWhatsAppService();
+      const systemWhatsApp = getSystemWhatsAppServiceForRole(role);
       const status = await systemWhatsApp.getInstanceStatus();
 
       res.json({
         success: true,
         data: {
-          instanceName: SYSTEM_INSTANCE_NAME,
+          role,
+          instanceName: systemInstanceNameForRole(role),
           state: status.state,
           connected: status.state === 'open',
         },
@@ -92,7 +117,8 @@ export class WhatsAppController {
       res.json({
         success: true,
         data: {
-          instanceName: SYSTEM_INSTANCE_NAME,
+          role,
+          instanceName: systemInstanceNameForRole(role),
           state: 'not_configured',
           connected: false,
         },
@@ -106,7 +132,7 @@ export class WhatsAppController {
   async getSystemQRCode(req: Request, res: Response, next: NextFunction) {
     try {
       requireSystemApiKey(req);
-      const systemWhatsApp = getSystemWhatsAppService();
+      const systemWhatsApp = getSystemWhatsAppServiceForRole(systemRole(req));
       const qrcode = await systemWhatsApp.getQRCode();
 
       res.json({
@@ -366,9 +392,11 @@ export class WhatsAppController {
 
       logger.debug({ event, instance }, 'Webhook received');
 
-      // bela360_system nao pertence a nenhum negocio - e a Ana, atendimento
-      // comercial do proprio bela360 (landing page "Falar com a gente").
-      if (instance === SYSTEM_INSTANCE_NAME) {
+      // A instancia de atendimento (numero da Bela) nao pertence a nenhum
+      // negocio - toda mensagem que chega nela e a Ana, atendimento comercial
+      // do proprio bela360 (CTA "Falar no WhatsApp" da landing). SYSTEM e
+      // SUPPORT podem ser o mesmo numero hoje, por isso os dois caem aqui.
+      if (instance === SUPPORT_INSTANCE_NAME || instance === SYSTEM_INSTANCE_NAME) {
         if (event === 'messages.upsert') {
           const messages = Array.isArray(data) ? data : [data];
           for (const msg of messages) {

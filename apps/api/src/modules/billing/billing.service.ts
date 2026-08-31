@@ -1,7 +1,7 @@
 import { SubscriptionStatus } from '@prisma/client';
 import { prisma, env, logger } from '../../config';
 import { AppError, ValidationError, NotFoundError } from '../../common/errors';
-import { PREMIUM_MODULES } from '../platform/plan';
+import { PREMIUM_MODULES, getTrialStatus, TRIAL_DAYS } from '../platform/plan';
 import { asaasClient } from './asaas.client';
 
 function onlyDigits(value: string): string {
@@ -29,6 +29,40 @@ function unlockPremiumModules(settings: unknown, expiresAt: Date): Record<string
 export class BillingService {
   async getSubscription(businessId: string) {
     return prisma.subscription.findUnique({ where: { businessId } });
+  }
+
+  /**
+   * Visão completa da assinatura pro frontend: estado do teste gratuito,
+   * preço e ciclo do plano, e a assinatura no Asaas (se já existir). É o que
+   * a tela /assinatura e o banner do dashboard consomem.
+   */
+  async getOverview(businessId: string) {
+    const [business, subscription] = await Promise.all([
+      prisma.business.findUniqueOrThrow({ where: { id: businessId } }),
+      prisma.subscription.findUnique({ where: { businessId } }),
+    ]);
+
+    const trial = getTrialStatus(business.settings);
+    const hasActiveSubscription = subscription?.status === SubscriptionStatus.ACTIVE;
+
+    return {
+      planCode: 'PREMIUM',
+      price: env.ASAAS_SUBSCRIPTION_VALUE,
+      billingConfigured: !!env.ASAAS_API_KEY,
+      trialDays: TRIAL_DAYS,
+      trial,
+      // true = pode usar marketing/automação/fidelidade/estoque agora
+      premiumActive: hasActiveSubscription || (trial?.active ?? false),
+      premiumModules: PREMIUM_MODULES,
+      subscription: subscription
+        ? {
+            status: subscription.status,
+            value: Number(subscription.value),
+            nextDueDate: subscription.nextDueDate,
+            cancelledAt: subscription.cancelledAt,
+          }
+        : null,
+    };
   }
 
   /**
@@ -70,14 +104,20 @@ export class BillingService {
       });
     }
 
-    const nextDueDate = new Date();
-    nextDueDate.setDate(nextDueDate.getDate() + 1); // primeira cobranca amanha
+    // A 1a cobranca cai no fim do teste gratuito (o dono nao paga durante os
+    // 7 dias). Se o teste ja acabou — ou o negocio nunca teve teste —, cobra
+    // amanha. O Asaas exige nextDueDate >= amanha, entao aplicamos um piso.
+    const trial = getTrialStatus(business.settings);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const trialEnd = trial?.active ? new Date(trial.endsAt) : null;
+    const nextDueDate = trialEnd && trialEnd > tomorrow ? trialEnd : tomorrow;
 
     const asaasSubscription = await asaasClient.createSubscription({
       customer: customer.id,
       value: env.ASAAS_SUBSCRIPTION_VALUE,
       nextDueDate: toIsoDate(nextDueDate),
-      description: 'Assinatura bela360 — Plano Premium',
+      description: `Assinatura bela360 — Plano Premium (R$ ${env.ASAAS_SUBSCRIPTION_VALUE}/mês)`,
     });
 
     const subscription = await prisma.subscription.upsert({

@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { prisma, redis, logger, env } from '../../config';
 import { telegramClient } from '../telegram/telegram.client';
-import { getSystemWhatsAppService } from '../whatsapp/whatsapp.service';
+import { getOutreachWhatsAppService } from '../whatsapp/whatsapp.service';
 import { AppError } from '../../common/errors';
 import { verifyPassword, hashPassword } from '../../common/password';
 
@@ -54,51 +54,28 @@ export class AuthService {
   private readonly DELIVERY_ALERT_COOLDOWN_SECONDS = 15 * 60;
 
   /**
-   * Tenta mandar pelo WhatsApp institucional (instancia de sistema no
-   * Evolution) primeiro; se a instancia nao estiver conectada ou o envio
-   * falhar, cai pro Telegram (se o usuario ja tiver vinculado um chat, ver
-   * linkTelegram). Nunca lanca erro pra quem chama - notificacao de OTP nao
-   * pode derrubar login/cadastro so porque um canal de entrega falhou.
+   * Entrega o codigo/mensagem de sistema pelo WhatsApp de outreach (o numero
+   * que dispara a 1a mensagem). O cliente NUNCA fala com a gente pelo
+   * Telegram - ele fica so como canal de alerta interno pro admin.
    *
-   * Se o usuario ainda nao vinculou Telegram, nao ha "canal de fallback" pra
-   * tentar - isso e o caminho normal enquanto o WhatsApp institucional
-   * estiver fora do ar (numero bloqueado em 2026-08-18): a pessoa recebe o
-   * codigo assim que abrir o link do bot (botao "Abrir o Telegram e receber
-   * o codigo" no cadastro/login, que dispara requestTelegramLink ->
-   * relayPendingOtp). Isso NAO e alertavel, e o fluxo esperado pra todo
-   * cadastro novo.
-   *
-   * So alerta o admin quando o usuario JA tinha Telegram vinculado (deveria
-   * ter recebido automaticamente) e mesmo assim os dois canais falharam -
-   * isso sim e uma falha de infraestrutura de verdade (bot token invalido,
-   * Telegram fora do ar, etc), nao o "ainda nao vinculei" esperado.
+   * Nunca lanca erro pra quem chama - notificacao de OTP nao pode derrubar
+   * login/cadastro so porque a entrega falhou. Se o WhatsApp falhar, alerta
+   * o admin (com cooldown) pra alguem mandar o codigo na mao.
    */
   private async notifyUser(user: { id: string; phone: string; telegramChatId: string | null }, text: string): Promise<void> {
     try {
-      await getSystemWhatsAppService().sendText({ number: user.phone, text });
-      return;
+      await getOutreachWhatsAppService().sendText({ number: user.phone, text });
     } catch (error) {
-      logger.warn(
-        { error, phone: user.phone },
-        'WhatsApp institucional indisponivel, usando fallback Telegram'
-      );
-    }
-
-    if (!user.telegramChatId) return;
-
-    try {
-      await telegramClient.sendMessage(user.telegramChatId, text);
-    } catch (error) {
-      logger.error({ error, phone: user.phone }, 'Fallback Telegram tambem falhou');
+      logger.error({ error, phone: user.phone }, 'Falha ao entregar mensagem de sistema pelo WhatsApp');
       await this.alertAdminsOfDeliveryFailure(user.phone);
     }
   }
 
   /**
-   * Avisa os admins que um usuario com Telegram ja vinculado nao recebeu um
-   * codigo/mensagem de sistema por nenhum canal - falha de infraestrutura
-   * de verdade, nao o "usuario ainda nao vinculou Telegram" esperado.
-   * Cooldown de 15min pra nao virar spam se o problema persistir.
+   * Avisa os admins que um usuario nao recebeu um codigo/mensagem de sistema
+   * pelo WhatsApp - falha de infraestrutura (instancia fora do ar, numero
+   * desconectado). Cooldown de 15min pra nao virar spam se o problema
+   * persistir.
    *
    * Usa ADMIN_TELEGRAM_CHAT_ID (env) como destino principal - nenhuma conta
    * com isSuperAdmin=true tem Telegram vinculado hoje (achado em
@@ -126,9 +103,9 @@ export class AuthService {
       }
 
       const alertText =
-        `⚠️ bela360: usuário ${phone} já tinha Telegram vinculado mas não recebeu ` +
-        `o código/mensagem de sistema por nenhum canal (WhatsApp e Telegram falharam). ` +
-        `Verifique se o bot Telegram está respondendo.`;
+        `⚠️ bela360: não consegui entregar o código/mensagem de sistema para ${phone} ` +
+        `pelo WhatsApp. Verifique se a instância do Evolution está conectada e ` +
+        `mande o código na mão se for um cadastro/login em andamento.`;
 
       await Promise.all([...chatIds].map(chatId => telegramClient.sendMessage(chatId, alertText)));
     } catch (error) {
@@ -257,7 +234,7 @@ export class AuthService {
 
     await this.notifyUser(
       { id: userId, phone: normalizedPhone, telegramChatId: null },
-      `🎉 Bem-vindo(a) ao bela360, ${businessName}!\n\nSeu código de acesso:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos. Use esse número de telefone pra entrar na sua conta em bela360.wayia.com.br/login.`
+      `🎉 Bem-vindo(a) ao bela360, ${businessName}!\n\nSeu código de acesso:\n\n*${otp}*\n\nVálido por ${this.OTP_EXPIRY_MINUTES} minutos. Use esse número de telefone pra entrar em bela360.wayia.com.br/login.\n\nVocê tem 7 dias com todos os recursos liberados. Depois disso, os recursos premium (marketing, automação, fidelidade e estoque) ficam disponíveis pelo plano de R$ 97/mês — a agenda, os clientes e o financeiro continuam liberados sempre.`
     );
   }
 

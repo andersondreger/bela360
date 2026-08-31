@@ -22,6 +22,8 @@ export interface CurrentUser {
         logoUrl?: string;
         primaryColor?: string;
       };
+      premiumModules?: Partial<Record<'MARKETING' | 'AUTOMATION' | 'LOYALTY' | 'INVENTORY', string>>;
+      trial?: { startedAt?: string; endsAt: string; plan?: string };
       [key: string]: unknown;
     };
   };

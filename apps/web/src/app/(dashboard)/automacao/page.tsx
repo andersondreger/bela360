@@ -239,14 +239,15 @@ export default function AutomacaoPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-bela-gold via-amber-500 to-orange-500 text-white">
             <Crown className="h-7 w-7" />
           </div>
-          <h2 className="text-lg font-semibold">Este é um recurso premium</h2>
+          <h2 className="text-lg font-semibold">Recurso do plano Premium</h2>
           <p className="mt-2 max-w-md mx-auto text-muted-foreground">
-            Este recurso faz parte do plano premium do bela360. Peça um cupom de desbloqueio em{' '}
-            <a href="/configuracoes" className="font-medium text-primary hover:underline">
-              Configurações &gt; Plano
-            </a>
-            .
+            Seu teste gratuito de 7 dias terminou ou este negócio ainda não assinou.
+            Marketing, automação, fidelidade e estoque fazem parte do plano Premium
+            (R$ 97/mês).
           </p>
+          <a href="/assinatura" className="mt-5 inline-flex">
+            <Button>Ver plano e assinar</Button>
+          </a>
         </div>
       </div>
     );

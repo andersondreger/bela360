@@ -76,7 +76,6 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
-  const [telegramLink, setTelegramLink] = useState('');
 
   const update = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const raw = e.target.value;
@@ -128,19 +127,6 @@ export default function OnboardingPage() {
 
       setDone(true);
       setStep(3);
-
-      const ownerPhone = sameAsBusinessPhone ? form.phone.replace(/\D/g, '') : form.ownerPhone.replace(/\D/g, '');
-      try {
-        const linkRes = await fetch(`${API_BASE_URL}/auth/telegram/link`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: ownerPhone }),
-        });
-        const linkData = await linkRes.json();
-        if (linkRes.ok && linkData.success) setTelegramLink(linkData.data.link);
-      } catch {
-        // Sem link direto, a pessoa ainda consegue vincular manualmente na tela de login.
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível concluir o cadastro');
     } finally {
@@ -182,32 +168,18 @@ export default function OnboardingPage() {
                 <CheckCircle2 className="mx-auto mb-4 h-14 w-14 text-emerald-400" />
                 <h2 className="text-xl font-semibold text-white">Salão cadastrado!</h2>
                 <p className="mx-auto mt-2 max-w-sm text-sm text-white/70">
-                  Seu código de acesso já foi gerado para{' '}
+                  Enviamos seu código de acesso por WhatsApp para{' '}
                   <span className="font-medium text-white">
                     {sameAsBusinessPhone ? form.phone : form.ownerPhone}
                   </span>
-                  . Abra o Telegram pra receber na hora.
+                  . Você tem <span className="font-medium text-white">7 dias com todos os recursos liberados</span>.
                 </p>
-                {telegramLink ? (
-                  <a href={telegramLink} target="_blank" rel="noopener noreferrer" className="mt-6 block">
-                    <Button className="w-full" size="lg">
-                      Abrir o Telegram e receber o código
-                    </Button>
-                  </a>
-                ) : (
-                  <Button className="mt-6 w-full" size="lg" onClick={() => (window.location.href = '/login')}>
-                    Ir para o login
-                  </Button>
-                )}
-                {telegramLink && (
-                  <button
-                    type="button"
-                    className="mt-3 text-xs text-white/50 underline underline-offset-2 hover:text-white/70"
-                    onClick={() => (window.location.href = '/login')}
-                  >
-                    Já recebi o código, ir para o login
-                  </button>
-                )}
+                <Button className="mt-6 w-full" size="lg" onClick={() => (window.location.href = '/login')}>
+                  Ir para o login
+                </Button>
+                <p className="mt-3 text-xs text-white/50">
+                  Não chegou em 1 minuto? É só pedir o código de novo na tela de login.
+                </p>
               </motion.div>
             ) : step === 1 ? (
               <motion.div

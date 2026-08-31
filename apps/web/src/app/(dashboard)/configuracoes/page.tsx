@@ -674,8 +674,7 @@ function ProfissionaisTab() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            O telefone é usado pelo profissional para receber o código de acesso pelo WhatsApp (ou Telegram, se o
-            WhatsApp do sistema ainda não estiver conectado).
+            O telefone é usado pelo profissional para receber o código de acesso pelo WhatsApp.
           </p>
 
           {formError && <p className="text-sm text-destructive">{formError}</p>}

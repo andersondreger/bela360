@@ -21,6 +21,18 @@ const envSchema = z.object({
   EVOLUTION_API_URL: z.string().url().default('http://localhost:8080'),
   EVOLUTION_API_KEY: z.string(),
   EVOLUTION_INSTANCE_NAME: z.string().default('bela360'),
+  // Numero que dispara a 1a mensagem (prospeccao + boas-vindas + OTP) — o
+  // numero pessoal do Anderson. Numero que atende o cliente depois (Ana
+  // respondendo inbound) — numero institucional da Bela. Enquanto for um
+  // numero so, ambos caem em EVOLUTION_INSTANCE_NAME (default abaixo).
+  EVOLUTION_OUTREACH_INSTANCE_NAME: z.string().optional(),
+  EVOLUTION_SUPPORT_INSTANCE_NAME: z.string().optional(),
+  // Numero publico de atendimento no formato E.164 sem "+" (ex: 5545991397543),
+  // usado nos links wa.me da landing / login / onboarding.
+  SUPPORT_WHATSAPP_NUMBER: z.string().optional(),
+
+  // Teste completo gratis antes de exigir assinatura (dias)
+  TRIAL_DAYS: z.coerce.number().default(7),
 
   // Anthropic (Ana — atendimento comercial via WhatsApp/Telegram)
   ANTHROPIC_API_KEY: z.string(),

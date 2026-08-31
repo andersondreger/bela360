@@ -296,11 +296,11 @@ export default function EstoquePage() {
           <Boxes className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
           <h2 className="text-lg font-semibold mb-1">Recurso Premium</h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Este recurso faz parte do plano premium do bela360. Peça um cupom de desbloqueio em{' '}
-            <a href="/configuracoes" className="text-primary underline">
-              Configurações &gt; Plano
+            Seu teste gratuito de 7 dias terminou ou este negócio ainda não assinou.
+            Faz parte do plano Premium (R$ 97/mês).{' '}
+            <a href="/assinatura" className="text-primary underline">
+              Ver plano e assinar
             </a>
-            .
           </p>
         </div>
       </div>

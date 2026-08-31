@@ -11,8 +11,8 @@ const checkoutSchema = z.object({
 export class BillingController {
   async getSubscription(req: Request, res: Response, next: NextFunction) {
     try {
-      const subscription = await billingService.getSubscription(req.user!.businessId);
-      res.json({ success: true, data: subscription });
+      const overview = await billingService.getOverview(req.user!.businessId);
+      res.json({ success: true, data: overview });
     } catch (error) {
       next(error);
     }

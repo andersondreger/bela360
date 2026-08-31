@@ -19,6 +19,8 @@ import {
   UserCircle,
   Settings,
   LogOut,
+  Crown,
+  AlertTriangle,
 } from 'lucide-react';
 import { AuroraBackground, Logo } from '@/components/ui';
 import { fetchCurrentUser, logout, type CurrentUser } from '@/lib/auth';
@@ -37,9 +39,47 @@ const navigation = [
   { name: 'Automação', href: '/automacao', icon: Zap },
   { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
   { name: 'Analíticos', href: '/analiticos', icon: BarChart3 },
+  { name: 'Assinatura', href: '/assinatura', icon: Crown },
   { name: 'Meu Perfil', href: '/perfil', icon: UserCircle },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
 ];
+
+const PREMIUM_MODULE_KEYS = ['MARKETING', 'AUTOMATION', 'LOYALTY', 'INVENTORY'] as const;
+
+/**
+ * Lê settings.trial + settings.premiumModules (vêm do /auth/me) e decide se o
+ * dashboard mostra a faixa de aviso: contagem regressiva quando faltam ≤3 dias
+ * de teste, ou chamada pra assinar quando o teste acabou e nada mais liberou
+ * os módulos premium (cupom/assinatura ativa gravam expiry futura também).
+ */
+function trialBanner(settings: CurrentUser['business']['settings']): { tone: 'warn' | 'info'; text: string; cta: string } | null {
+  const trial = settings?.trial;
+  if (!trial?.endsAt) return null;
+
+  const now = Date.now();
+  const endsAt = new Date(trial.endsAt).getTime();
+  const premiumActive = PREMIUM_MODULE_KEYS.some((k) => {
+    const iso = settings?.premiumModules?.[k];
+    return iso && new Date(iso).getTime() > now;
+  });
+
+  if (endsAt > now) {
+    const daysLeft = Math.ceil((endsAt - now) / 86_400_000);
+    if (daysLeft > 3) return null;
+    return {
+      tone: 'info',
+      text: `Seu teste completo termina em ${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'}. Depois disso, marketing, automação, fidelidade e estoque exigem o plano Premium.`,
+      cta: 'Assinar agora',
+    };
+  }
+
+  if (premiumActive) return null;
+  return {
+    tone: 'warn',
+    text: 'Seu teste de 7 dias terminou. Marketing, automação, fidelidade e estoque estão bloqueados até você assinar o plano Premium (R$ 97/mês).',
+    cta: 'Ver plano',
+  };
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -164,6 +204,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
         </header>
+        {(() => {
+          const banner = pathname.startsWith('/assinatura') ? null : trialBanner(user.business.settings);
+          if (!banner) return null;
+          return (
+            <div
+              className={`flex flex-wrap items-center gap-3 border-b px-8 py-3 text-sm ${
+                banner.tone === 'warn'
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                  : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+              }`}
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span className="flex-1">{banner.text}</span>
+              <Link
+                href="/assinatura"
+                className="shrink-0 rounded-lg bg-gradient-brand px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                {banner.cta}
+              </Link>
+            </div>
+          );
+        })()}
         <main className="relative p-8">{children}</main>
       </div>
     </div>

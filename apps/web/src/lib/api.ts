@@ -323,6 +323,41 @@ export const platformApi = {
   redeemCoupon: (code: string) => api.post<PlatformBusiness>('/platform/coupons/redeem', { code }),
 };
 
+// Billing / assinatura (plano Premium, cobrado via Asaas)
+export interface TrialStatus {
+  startedAt: string | null;
+  endsAt: string;
+  active: boolean;
+  daysLeft: number;
+}
+
+export interface BillingOverview {
+  planCode: 'PREMIUM';
+  price: number;
+  billingConfigured: boolean;
+  trialDays: number;
+  trial: TrialStatus | null;
+  /** true = marketing/automação/fidelidade/estoque liberados agora (teste ou assinatura ativa) */
+  premiumActive: boolean;
+  premiumModules: PremiumModule[];
+  subscription: {
+    status: 'PENDING_PAYMENT' | 'ACTIVE' | 'OVERDUE' | 'CANCELLED';
+    value: number;
+    nextDueDate: string | null;
+    cancelledAt: string | null;
+  } | null;
+}
+
+export const billingApi = {
+  getOverview: () => api.get<BillingOverview>('/billing/subscription'),
+
+  /** Cria/retoma a assinatura no Asaas e devolve o link de pagamento da 1a fatura. */
+  checkout: (document?: string) =>
+    api.post<{ checkoutUrl: string | null; subscription: unknown }>('/billing/subscription/checkout', { document }),
+
+  cancel: () => api.post<unknown>('/billing/subscription/cancel', {}),
+};
+
 // Clients API
 export interface Client {
   id: string;
