@@ -274,6 +274,19 @@ export default function HomePage() {
                   sizes="(max-width: 1024px) 85vw, 620px"
                   className="object-contain object-bottom drop-shadow-[0_25px_45px_rgba(0,0,0,0.5)]"
                 />
+                {/* Link "Mobile" logo abaixo do QR Code que já vem desenhado na arte
+                    do hero. Na imagem 1:1 o QR vai de ~22% a ~56% da largura e
+                    termina a ~87% da altura; como ela é object-contain/bottom num
+                    container 4:5, o rodapé do QR cai por volta de 90% da altura do
+                    container. Abre a experiência em Realidade Aumentada do WayAR. */}
+                <a
+                  href="https://wayar.wayia.com.br/ar/27d5c6c5-a466-437e-ab4e-d84be764105d"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute left-[39%] top-[90%] z-10 -translate-x-1/2 text-sm font-semibold text-orange-500 underline-offset-4 hover:underline sm:text-base"
+                >
+                  Mobile
+                </a>
               </div>
               <div
                 data-hero-float
