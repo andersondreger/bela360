@@ -3,6 +3,7 @@ import { env, logger, connectDatabase, connectRedis } from './config';
 import { initAutomationWorkers } from './modules/automation';
 import { initWaitlistWorkers } from './modules/waitlist';
 import { initMarketingWorkers } from './modules/marketing';
+import { initMarketplaceJobs } from './modules/marketplace';
 
 const PORT = env.PORT;
 
@@ -20,6 +21,7 @@ async function bootstrap(): Promise<void> {
     initAutomationWorkers();
     initWaitlistWorkers();
     initMarketingWorkers();
+    initMarketplaceJobs();
     logger.info('✅ All workers initialized (automation, waitlist, marketing)');
 
     // Start server

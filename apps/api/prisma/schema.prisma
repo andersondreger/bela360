@@ -191,6 +191,11 @@ model Business {
   agentes  Agente[]
   reunioes Reuniao[]
 
+  // Marketplace (cashback + split)
+  mkCheckouts MarketplaceCheckout[]
+  mkOrders    MarketplaceOrder[]
+  mkLedger    CashbackLedger[]
+
   @@index([phone])
   @@index([status])
   @@map("businesses")
@@ -207,12 +212,12 @@ model User {
   isSuperAdmin Boolean  @default(false) // Platform operator (Anderson), independent of per-business role. Grants coupon issuance.
 
   // Authentication
-  otpCode      String?
-  otpExpiresAt DateTime?
-  lastLoginAt  DateTime?
-  passwordHash String? // Fallback login (scrypt "salt:hash"), independent of WhatsApp OTP delivery
-  telegramChatId String? @unique // canal alternativo pra receber OTP/boas-vindas enquanto o WhatsApp de sistema nao conecta
-  avatarUrl    String?
+  otpCode        String?
+  otpExpiresAt   DateTime?
+  lastLoginAt    DateTime?
+  passwordHash   String? // Fallback login (scrypt "salt:hash"), independent of WhatsApp OTP delivery
+  telegramChatId String?   @unique // canal alternativo pra receber OTP/boas-vindas enquanto o WhatsApp de sistema nao conecta
+  avatarUrl      String?
 
   // Professional specific
   color      String? // Calendar color
@@ -1502,7 +1507,7 @@ enum CreationStatus {
 // Peça visual criada no editor de publicidade (fundo + foto + texto), com
 // download e histórico visual do que já foi feito e do que está planejado.
 model MarketingCreation {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   businessId String
   title      String
   imageUrl   String
@@ -1562,12 +1567,12 @@ model Subscription {
   asaasCustomerId     String // cliente correspondente no Asaas
   asaasSubscriptionId String @unique // assinatura recorrente no Asaas
 
-  planCode String @default("PREMIUM") // hoje so existe um plano; campo existe pra crescer sem migration
+  planCode String  @default("PREMIUM") // hoje so existe um plano; campo existe pra crescer sem migration
   value    Decimal @db.Decimal(10, 2)
 
-  status         SubscriptionStatus @default(PENDING_PAYMENT)
-  nextDueDate    DateTime?
-  cancelledAt    DateTime?
+  status      SubscriptionStatus @default(PENDING_PAYMENT)
+  nextDueDate DateTime?
+  cancelledAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1734,4 +1739,208 @@ model LogPropagacaoKai {
   @@index([integracaoId])
   @@index([agenteId])
   @@map("log_propagacao_kai")
+}
+
+// ============================================
+// MARKETPLACE (cashback + split Asaas)
+// Dinheiro sempre em centavos (Int); percentuais da comissao em pontos-base (12% = 1200).
+// Distribuidores, produtos e regras sao da plataforma (geridos pelo CEO); pedidos e ledger
+// sao do tenant (Business) e toda consulta do cliente filtra por businessId.
+// ============================================
+
+enum DistributorStatus {
+  ATIVO
+  EM_NEGOCIACAO
+  PAUSADO
+}
+
+enum MarketplaceCategory {
+  CABELO
+  ESTETICA_FACIAL
+  CORPORAL
+  DESCARTAVEIS
+  EQUIPAMENTOS
+}
+
+enum MarketplaceOrderStatus {
+  RECEBIDO
+  PAGO
+  ENVIADO
+  ENTREGUE
+  CASHBACK_LIBERADO
+  ESTORNADO
+}
+
+enum SplitStatus {
+  AGUARDANDO
+  LIQUIDADO
+  ESTORNADO
+}
+
+enum CheckoutStatus {
+  PENDENTE
+  PAGO
+  ESTORNADO
+  CANCELADO
+}
+
+enum LedgerType {
+  CASHBACK_PREVISTO
+  CASHBACK_LIBERADO
+  USO_DE_SALDO
+  CANCELAMENTO
+  ESTORNO
+}
+
+// Linha unica (id = "default"): regras globais editadas pelo CEO.
+model MarketplaceConfig {
+  id               String   @id @default("default")
+  cashbackSharePct Int      @default(50)
+  walletLimitPct   Int      @default(30)
+  returnDays       Int      @default(7)
+  feeBp            Int      @default(300)
+  updatedAt        DateTime @updatedAt
+
+  @@map("marketplace_config")
+}
+
+model Distributor {
+  id              String            @id @default(cuid())
+  name            String
+  contact         String?
+  commissionBp    Int // 1200 = 12%
+  payDays         Int               @default(30)
+  status          DistributorStatus @default(EM_NEGOCIACAO)
+  asaasWalletId   String?
+  walletCheckedAt DateTime? // quando o walletId foi validado no Asaas (Fase 2)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  products MarketplaceProduct[]
+  orders   MarketplaceOrder[]
+
+  @@map("marketplace_distributors")
+}
+
+model MarketplaceProduct {
+  id            String              @id @default(cuid())
+  distributorId String
+  name          String
+  category      MarketplaceCategory
+  priceCents    Int
+  imageUrl      String?
+  active        Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  distributor Distributor @relation(fields: [distributorId], references: [id])
+
+  @@index([distributorId])
+  @@index([category, active])
+  @@map("marketplace_products")
+}
+
+// Um pagamento por checkout, ligado a N pedidos (um por distribuidor).
+model MarketplaceCheckout {
+  id               String         @id @default(cuid())
+  businessId       String
+  grossCents       Int // soma dos subtotais
+  walletUsedCents  Int            @default(0)
+  paidCents        Int // gross - walletUsed
+  status           CheckoutStatus @default(PENDENTE)
+  gateway          String         @default("simulado") // simulado | asaas
+  gatewayPaymentId String?        @unique
+  paidAt           DateTime?
+  createdAt        DateTime       @default(now())
+
+  business Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders   MarketplaceOrder[]
+
+  @@index([businessId])
+  @@map("marketplace_checkouts")
+}
+
+model MarketplaceOrder {
+  id              String                 @id @default(cuid())
+  number          Int                    @unique @default(autoincrement())
+  checkoutId      String
+  businessId      String
+  distributorId   String
+  status          MarketplaceOrderStatus @default(RECEBIDO)
+  splitStatus     SplitStatus            @default(AGUARDANDO)
+  subtotalCents   Int
+  walletUsedCents Int                    @default(0)
+  paidCents       Int
+  // Foto das regras no momento da compra: mudar regra nao altera pedido antigo.
+  commissionBp    Int
+  commissionCents Int
+  cashbackCents   Int
+  feeCents        Int
+  paidAt          DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  releaseAt       DateTime? // entrega + prazo de devolucao
+  releasedAt      DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime               @default(now())
+
+  checkout    MarketplaceCheckout    @relation(fields: [checkoutId], references: [id])
+  business    Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  distributor Distributor            @relation(fields: [distributorId], references: [id])
+  items       MarketplaceOrderItem[]
+  ledger      CashbackLedger[]
+
+  @@index([businessId, createdAt])
+  @@index([status, releaseAt])
+  @@index([distributorId])
+  @@map("marketplace_orders")
+}
+
+model MarketplaceOrderItem {
+  id         String @id @default(cuid())
+  orderId    String
+  productId  String
+  name       String
+  qty        Int
+  priceCents Int
+
+  order MarketplaceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("marketplace_order_items")
+}
+
+// Append-only (trigger no banco bloqueia UPDATE/DELETE). Corrigir = lancar outro que compense.
+// (orderId, type) unico: cada etapa do pedido grava no maximo uma vez, entao reprocessar um
+// evento nao duplica lancamento.
+model CashbackLedger {
+  id          String     @id @default(cuid())
+  businessId  String
+  orderId     String?
+  type        LedgerType
+  amountCents Int // sempre positivo; o sinal vem do tipo
+  note        String
+  createdAt   DateTime   @default(now())
+
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  order    MarketplaceOrder? @relation(fields: [orderId], references: [id])
+
+  @@unique([orderId, type])
+  @@index([businessId, createdAt])
+  @@map("cashback_ledger")
+}
+
+// Auditoria: distribuidores, regras de cashback e estornos.
+model MarketplaceAudit {
+  id        String   @id @default(cuid())
+  actor     String // userId, "ceo-service" ou "system"
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@map("marketplace_audit")
 }

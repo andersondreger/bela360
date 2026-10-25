@@ -26,6 +26,7 @@ import { agentesRoutes } from './modules/agentes';
 import { kaiRoutes } from './modules/kai';
 import { billingRoutes } from './modules/billing';
 import { telegramRoutes } from './modules/telegram';
+import { marketplaceRoutes, marketplaceAdminRoutes } from './modules/marketplace';
 import { PlatformModule } from '@prisma/client';
 import { authMiddleware } from './common/middleware/auth.middleware';
 
@@ -135,6 +136,8 @@ app.use('/api/professional', authMiddleware, professionalRoutes);
 app.use('/api/platform', authMiddleware, platformRoutes);
 app.use('/api/agentes', authMiddleware, agentesRoutes);
 app.use('/api/kai', authMiddleware, kaiRoutes);
+app.use('/api/marketplace/admin', marketplaceAdminRoutes);
+app.use('/api/marketplace', authMiddleware, marketplaceRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

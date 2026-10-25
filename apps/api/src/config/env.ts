@@ -65,6 +65,11 @@ const envSchema = z.object({
   ASAAS_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
   ASAAS_WEBHOOK_TOKEN: z.string().optional(),
   ASAAS_SUBSCRIPTION_VALUE: z.coerce.number().default(97),
+
+  // Marketplace: "simulado" (Fase 1, pagamento confirmado por botao) ou "asaas" (Fase 2).
+  MARKETPLACE_GATEWAY: z.enum(['simulado', 'asaas']).default('simulado'),
+  // Token do servico do wayia.com.br (payments-api) que opera a visao CEO. Sem ele, so super admin logado.
+  MARKETPLACE_SERVICE_TOKEN: z.string().min(24).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

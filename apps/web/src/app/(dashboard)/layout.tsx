@@ -21,6 +21,7 @@ import {
   LogOut,
   Crown,
   AlertTriangle,
+  ShoppingBag,
 } from 'lucide-react';
 import { AuroraBackground, Logo } from '@/components/ui';
 import { fetchCurrentUser, logout, type CurrentUser } from '@/lib/auth';
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Lista de Espera', href: '/lista-espera', icon: Clock },
   { name: 'Fidelidade', href: '/fidelidade', icon: Heart },
   { name: 'Estoque', href: '/estoque', icon: Package },
+  { name: 'Marketplace', href: '/marketplace', icon: ShoppingBag },
   { name: 'Financeiro', href: '/financeiro', icon: Wallet },
   { name: 'Marketing', href: '/marketing', icon: Megaphone },
   { name: 'Automação', href: '/automacao', icon: Zap },
