@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Variavel vazia (compose `${VAR:-}`) vale como nao configurada.
+const optionalSecret = (min: number) => z.preprocess(v => (v === '' ? undefined : v), z.string().min(min).optional());
+
 const envSchema = z.object({
   // App
   NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
@@ -70,11 +73,11 @@ const envSchema = z.object({
   MARKETPLACE_GATEWAY: z.enum(['simulado', 'asaas']).default('simulado'),
   // Token do servico do wayia.com.br (payments-api) que opera a visao CEO. Sem ele, so super admin logado.
   // Asaas DO MARKETPLACE: credenciais proprias (sandbox primeiro), separadas da cobranca da assinatura SaaS.
-  MARKETPLACE_ASAAS_API_KEY: z.string().optional(),
+  MARKETPLACE_ASAAS_API_KEY: optionalSecret(1),
   MARKETPLACE_ASAAS_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
-  MARKETPLACE_ASAAS_BASE_URL: z.string().url().optional(), // so para testes (Asaas simulado)
-  MARKETPLACE_ASAAS_WEBHOOK_TOKEN: z.string().min(24).optional(),
-  MARKETPLACE_SERVICE_TOKEN: z.string().min(24).optional(),
+  MARKETPLACE_ASAAS_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().url().optional()), // so para testes (Asaas simulado)
+  MARKETPLACE_ASAAS_WEBHOOK_TOKEN: optionalSecret(24),
+  MARKETPLACE_SERVICE_TOKEN: optionalSecret(24),
 });
 
 export type Env = z.infer<typeof envSchema>;
