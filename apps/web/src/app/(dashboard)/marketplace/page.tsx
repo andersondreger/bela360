@@ -167,8 +167,9 @@ function CartDrawer({ cart, setCart, open, onClose, onDone }: { cart: CartLine[]
     setBusy(true); setErr('');
     try {
       const c = await marketplaceApi.checkout(cart, useWallet);
-      // Fase 1: gateway simulado confirma na hora. Na Fase 2 abre a cobranca do Asaas.
+      // Simulado confirma na hora; com Asaas abre a cobranca (Pix, boleto ou cartao) e o webhook confirma depois.
       if (c.gateway === 'simulado') await marketplaceApi.simulatePay(c.checkoutId);
+      else if (c.invoiceUrl) window.open(c.invoiceUrl, '_blank', 'noopener');
       setCart([]); onDone(); onClose();
     } catch (e) { setErr((e as Error).message); }
     setBusy(false);
@@ -248,6 +249,9 @@ function Pedidos() {
             <div className="rounded-xl bg-muted p-3"><dt className="text-xs text-muted-foreground">Seu cashback</dt><dd className="font-semibold tabular-nums text-emerald-600">{brl(o.cashbackCents)}</dd></div>
           </dl>
           {o.status === 'ESTORNADO' ? <p className="text-sm font-semibold text-red-600">Pedido estornado. O split foi desfeito e o cashback foi cancelado.</p> : <Timeline status={o.status} />}
+          {o.status === 'RECEBIDO' && o.checkout?.invoiceUrl && (
+            <a href={o.checkout.invoiceUrl} target="_blank" rel="noopener noreferrer" className="inline-block rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Pagar agora</a>
+          )}
           {o.status === 'ENTREGUE' && o.releaseAt && <p className="text-xs text-muted-foreground">Cashback liberado em {fdate(o.releaseAt)}, ao fim do prazo de devolução.</p>}
         </CardContent></Card>
       ))}

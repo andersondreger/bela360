@@ -27,7 +27,7 @@ export interface OrderItem { name: string; qty: number; priceCents: number }
 export interface Order {
   id: string; number: number; status: OrderStatus; splitStatus: string; createdAt: string; releaseAt: string | null;
   paidCents: number; walletUsedCents: number; commissionBp: number; commissionCents: number; cashbackCents: number;
-  items: OrderItem[]; distributor: { id: string; name: string };
+  items: OrderItem[]; distributor: { id: string; name: string }; checkout?: { invoiceUrl: string | null; status: string };
 }
 export interface LedgerRow { id: string; type: string; amountCents: number; note: string; createdAt: string; order?: { number: number } | null }
 export interface Quote {
@@ -54,7 +54,7 @@ export const marketplaceApi = {
   },
   quote: (items: CartLine[], useWallet: boolean) => api.post<Quote>('/marketplace/cart/quote', { items, useWallet }),
   checkout: (items: CartLine[], useWallet: boolean) =>
-    api.post<{ checkoutId: string; paidCents: number; gateway: string; orders: { id: string; number: number }[] }>('/marketplace/checkout', { items, useWallet }),
+    api.post<{ checkoutId: string; paidCents: number; gateway: string; invoiceUrl: string | null; orders: { id: string; number: number }[] }>('/marketplace/checkout', { items, useWallet }),
   simulatePay: (checkoutId: string) => api.post<{ changed: boolean }>(`/marketplace/checkout/${checkoutId}/simulate-pay`),
   orders: (filter: 'todos' | 'andamento' | 'concluidos') => api.get<Order[]>(`/marketplace/orders?filter=${filter}`),
   cashback: () => api.get<{ wallet: Balance; ledger: LedgerRow[] }>('/marketplace/cashback'),

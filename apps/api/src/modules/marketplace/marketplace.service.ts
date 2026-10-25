@@ -1,9 +1,10 @@
 import { Prisma, MarketplaceOrderStatus, LedgerType } from '@prisma/client';
 import { prisma } from '../../config';
 import { ConflictError, NotFoundError, ValidationError } from '../../common/errors';
+import { asaasEnabled, asaasGateway, walletIdLooksValid } from './asaas.gateway';
 import {
   DEFAULT_RULES, MarketplaceRules, allocateDiscount, balanceOf, distributorSellable, orderMoney,
-  releaseDate, walletUsable, LedgerEntry,
+  releaseDate, walletUsable, validateSplit, LedgerEntry,
 } from './rules';
 
 type Tx = Prisma.TransactionClient;
@@ -117,15 +118,15 @@ export async function quoteCart(businessId: string, items: CartItem[], useWallet
 }
 
 export async function createCheckout(businessId: string, actor: string, items: CartItem[], useWallet: boolean) {
-  return prisma.$transaction(async tx => {
+  const created = await prisma.$transaction(async tx => {
     // Trava a linha do tenant: duas compras simultaneas nao gastam o mesmo saldo duas vezes.
     await tx.$queryRaw`SELECT id FROM businesses WHERE id = ${businessId} FOR UPDATE`;
     const q = await quoteCart(businessId, items, useWallet, tx);
 
     const checkout = await tx.marketplaceCheckout.create({
-      data: { businessId, grossCents: q.grossCents, walletUsedCents: q.walletCents, paidCents: q.paidCents },
+      data: { businessId, grossCents: q.grossCents, walletUsedCents: q.walletCents, paidCents: q.paidCents, gateway: asaasEnabled() ? 'asaas' : 'simulado' },
     });
-    const created = [];
+    const orders = [];
     for (const o of q.orders) {
       const order = await tx.marketplaceOrder.create({
         data: {
@@ -138,26 +139,80 @@ export async function createCheckout(businessId: string, actor: string, items: C
       });
       await postLedger(tx, { businessId, orderId: order.id, type: 'CASHBACK_PREVISTO', amountCents: o.money.cashbackCents, note: `Cashback do pedido #${order.number}` });
       await postLedger(tx, { businessId, orderId: order.id, type: 'USO_DE_SALDO', amountCents: o.walletUsedCents, note: `Saldo usado no pedido #${order.number}` });
-      created.push(order);
+      orders.push(order);
     }
     await audit(tx, actor, 'checkout.create', 'checkout', checkout.id, undefined, { grossCents: q.grossCents, walletCents: q.walletCents });
-    return { checkout, orders: created };
+    return { checkout, orders, quote: q };
   });
+
+  if (!asaasEnabled()) return { checkout: created.checkout, orders: created.orders };
+
+  // Asaas: um pagamento, um item de split por distribuidor. Se falhar, nada foi cobrado: desfaz o pedido local.
+  try {
+    const biz = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { name: true, email: true, phone: true, document: true } });
+    if (!biz.document) throw new ConflictError('Cadastre o CPF/CNPJ da clinica em Configuracoes para pagar pelo marketplace');
+    const perDist = new Map<string, { walletId: string; fixedCents: number }>();
+    for (const o of created.quote.orders) {
+      // Distribuidor recebe o preco combinado: valor pago - comissao (nunca a carteira da Bela 360).
+      const cur = perDist.get(o.distributor.id) ?? { walletId: o.distributor.asaasWalletId!.trim(), fixedCents: 0 };
+      cur.fixedCents += o.paidCents - o.money.commissionCents;
+      perDist.set(o.distributor.id, cur);
+    }
+    const split = [...perDist.values()];
+    // Limite do split = liquido da cobranca (depois das taxas). Usa a taxa estimada antes; o liquido real confere depois.
+    const estimatedNet = created.checkout.paidCents - created.quote.orders.reduce((a, o) => a + o.money.feeCents, 0);
+    validateSplit(split, estimatedNet);
+
+    const customerId = await asaasGateway.findOrCreateCustomer({ name: biz.name, cpfCnpj: biz.document, email: biz.email, phone: biz.phone });
+    const pay = await asaasGateway.createPayment({ customerId, totalCents: created.checkout.paidCents, checkoutId: created.checkout.id, description: `Marketplace Bela 360 - ${created.orders.length} pedido(s)`, split });
+    if (pay.netValueCents > 0) {
+      try { validateSplit(split, pay.netValueCents); }
+      catch (e) { await asaasGateway.deletePayment(pay.id).catch(() => undefined); throw e; }
+    }
+    const checkout = await prisma.marketplaceCheckout.update({ where: { id: created.checkout.id }, data: { gatewayPaymentId: pay.id, invoiceUrl: pay.invoiceUrl, netValueCents: pay.netValueCents || null } });
+    return { checkout, orders: created.orders };
+  } catch (err) {
+    await cancelUnpaidCheckout(created.checkout.id, actor, 'falha ao criar a cobranca');
+    throw err;
+  }
 }
 
-/** Pagamento confirmado (webhook na Fase 2; simulacao na Fase 1). Idempotente. */
-export async function confirmCheckoutPaid(checkoutId: string): Promise<{ changed: boolean }> {
+/** Checkout nunca pago (falha na cobranca, cobranca expirada ou apagada): desfaz o pedido e devolve o saldo. */
+export async function cancelUnpaidCheckout(checkoutId: string, actor: string, reason: string) {
+  const c = await prisma.marketplaceCheckout.findUnique({ where: { id: checkoutId }, include: { orders: { select: { id: true } } } });
+  if (!c || c.status !== 'PENDENTE') return;
+  for (const o of c.orders) await refundOrder(o.id, actor, reason);
+}
+
+/**
+ * Pagamento confirmado (webhook do Asaas, ou simulacao). Idempotente.
+ * `settled`: PAYMENT_RECEIVED = dinheiro recebido, o split e liquidado junto.
+ * `netValueCents`: liquido real informado pelo Asaas; substitui a taxa estimada.
+ */
+export async function confirmCheckoutPaid(checkoutId: string, opts: { settled?: boolean; netValueCents?: number } = {}): Promise<{ changed: boolean }> {
   return prisma.$transaction(async tx => {
-    const c = await tx.marketplaceCheckout.findUnique({ where: { id: checkoutId } });
+    const c = await tx.marketplaceCheckout.findUnique({ where: { id: checkoutId }, include: { orders: true } });
     if (!c) throw new NotFoundError('Checkout');
-    if (c.status !== 'PENDENTE') return { changed: false };
+    const simulated = c.gateway === 'simulado';
+    const settled = simulated || !!opts.settled;
     const now = new Date();
-    await tx.marketplaceCheckout.update({ where: { id: c.id }, data: { status: 'PAGO', paidAt: now } });
-    await tx.marketplaceOrder.updateMany({
-      where: { checkoutId: c.id, status: 'RECEBIDO' },
-      data: { status: 'PAGO', paidAt: now, splitStatus: c.gateway === 'simulado' ? 'LIQUIDADO' : 'AGUARDANDO' },
-    });
-    return { changed: true };
+    let changed = false;
+
+    if (c.status === 'PENDENTE') {
+      await tx.marketplaceCheckout.update({ where: { id: c.id }, data: { status: 'PAGO', paidAt: now, ...(opts.netValueCents ? { netValueCents: opts.netValueCents } : {}) } });
+      await tx.marketplaceOrder.updateMany({ where: { checkoutId: c.id, status: 'RECEBIDO' }, data: { status: 'PAGO', paidAt: now } });
+      // Taxa real (pago - liquido) repartida entre os pedidos, no lugar da estimativa.
+      if (opts.netValueCents && opts.netValueCents > 0) {
+        const fees = allocateDiscount(c.orders.map(o => o.paidCents), Math.max(0, c.paidCents - opts.netValueCents));
+        for (let i = 0; i < c.orders.length; i++) await tx.marketplaceOrder.update({ where: { id: c.orders[i].id }, data: { feeCents: fees[i] } });
+      }
+      changed = true;
+    }
+    if (settled) {
+      const r = await tx.marketplaceOrder.updateMany({ where: { checkoutId: c.id, splitStatus: 'AGUARDANDO', status: { not: 'ESTORNADO' } }, data: { splitStatus: 'LIQUIDADO' } });
+      changed = changed || r.count > 0;
+    }
+    return { changed };
   });
 }
 
@@ -197,6 +252,18 @@ export async function releaseDueCashback(now = new Date()): Promise<{ released: 
   return { released };
 }
 
+/** Estorno iniciado pelo CEO: com Asaas, devolve o dinheiro no gateway (o split acompanha) e depois desfaz o pedido. */
+export async function refundOrderWithGateway(orderId: string, actor: string, reason?: string) {
+  const o = await prisma.marketplaceOrder.findUnique({ where: { id: orderId }, include: { checkout: true } });
+  if (!o) throw new NotFoundError('Pedido');
+  if (o.status === 'CASHBACK_LIBERADO') throw new ConflictError('Cashback ja liberado: estorno exige fluxo de aprovacao (nao disponivel nesta versao)');
+  if (o.status !== 'ESTORNADO' && o.checkout.gateway === 'asaas' && o.checkout.gatewayPaymentId && o.checkout.status === 'PAGO') {
+    const siblings = await prisma.marketplaceOrder.count({ where: { checkoutId: o.checkoutId, status: { not: 'ESTORNADO' }, id: { not: o.id } } });
+    await asaasGateway.refund(o.checkout.gatewayPaymentId, siblings === 0 ? null : o.paidCents);
+  }
+  return refundOrder(orderId, actor, reason);
+}
+
 /** Estorno: desfaz o split, cancela o cashback a liberar e devolve o saldo usado. */
 export async function refundOrder(orderId: string, actor: string, reason?: string) {
   return prisma.$transaction(async tx => {
@@ -210,7 +277,10 @@ export async function refundOrder(orderId: string, actor: string, reason?: strin
     await postLedger(tx, { businessId: o.businessId, orderId: o.id, type: 'ESTORNO', amountCents: o.walletUsedCents, note: `Saldo devolvido: pedido #${o.number} estornado` });
     const updated = await tx.marketplaceOrder.update({ where: { id: o.id }, data: { status: 'ESTORNADO', splitStatus: 'ESTORNADO', refundedAt: new Date() } });
     const open = await tx.marketplaceOrder.count({ where: { checkoutId: o.checkoutId, status: { not: 'ESTORNADO' } } });
-    if (open === 0) await tx.marketplaceCheckout.update({ where: { id: o.checkoutId }, data: { status: 'ESTORNADO' } });
+    if (open === 0) {
+      const ck = await tx.marketplaceCheckout.findUnique({ where: { id: o.checkoutId }, select: { status: true } });
+      await tx.marketplaceCheckout.update({ where: { id: o.checkoutId }, data: { status: ck?.status === 'PENDENTE' ? 'CANCELADO' : 'ESTORNADO' } });
+    }
     await audit(tx, actor, 'order.refund', 'order', o.id, { status: o.status }, { status: 'ESTORNADO', reason });
     return updated;
   });
@@ -218,7 +288,7 @@ export async function refundOrder(orderId: string, actor: string, reason?: strin
 
 // ---------- leitura do cliente (sempre filtrada por businessId) ----------
 
-const orderInclude = { items: true, distributor: { select: { id: true, name: true } } } satisfies Prisma.MarketplaceOrderInclude;
+const orderInclude = { items: true, distributor: { select: { id: true, name: true } }, checkout: { select: { invoiceUrl: true, status: true } } } satisfies Prisma.MarketplaceOrderInclude;
 
 export async function listOrders(businessId: string, filter: 'todos' | 'andamento' | 'concluidos') {
   const status: MarketplaceOrderStatus[] | undefined =
@@ -349,6 +419,10 @@ export async function ceoClients() {
 export async function upsertDistributor(actor: string, id: string | null, data: Prisma.DistributorUncheckedCreateInput) {
   if (data.status === 'ATIVO' && !data.asaasWalletId?.trim()) {
     throw new ValidationError('Para ativar o distribuidor, informe o walletId do Asaas');
+  }
+  const wallet = data.asaasWalletId?.trim();
+  if (wallet && asaasEnabled() && !walletIdLooksValid(wallet)) {
+    throw new ValidationError('walletId invalido: deve ser o identificador (UUID) da carteira no Asaas');
   }
   if (id) {
     const before = await prisma.distributor.findUnique({ where: { id } });

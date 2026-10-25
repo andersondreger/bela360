@@ -2,6 +2,7 @@ import { logger } from '../../config';
 import { releaseDueCashback } from './marketplace.service';
 
 export { marketplaceRoutes, marketplaceAdminRoutes } from './marketplace.routes';
+export { marketplaceWebhookRoutes } from './marketplace.webhook';
 
 /** Job diario de liberacao do cashback (idempotente: o ledger so aceita um CASHBACK_LIBERADO por pedido). */
 export function initMarketplaceJobs(): void {

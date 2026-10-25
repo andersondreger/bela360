@@ -1850,6 +1850,8 @@ model MarketplaceCheckout {
   status           CheckoutStatus @default(PENDENTE)
   gateway          String         @default("simulado") // simulado | asaas
   gatewayPaymentId String?        @unique
+  invoiceUrl       String? // link de pagamento do Asaas
+  netValueCents    Int? // liquido informado pelo Asaas (depois das taxas)
   paidAt           DateTime?
   createdAt        DateTime       @default(now())
 
@@ -1943,4 +1945,17 @@ model MarketplaceAudit {
 
   @@index([entity, entityId])
   @@map("marketplace_audit")
+}
+
+// Idempotencia dos webhooks: o id do evento do Asaas e a chave primaria. Gravado na mesma
+// transacao que o processamento; o mesmo evento duas vezes bate na chave e e ignorado.
+model MarketplaceWebhookEvent {
+  id         String   @id
+  event      String
+  paymentId  String?
+  payload    Json
+  receivedAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@map("marketplace_webhook_events")
 }

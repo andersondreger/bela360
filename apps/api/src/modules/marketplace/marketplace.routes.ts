@@ -47,7 +47,7 @@ marketplaceRoutes.post('/cart/quote', wrap(async req => {
 marketplaceRoutes.post('/checkout', requireBuyer, wrap(async req => {
   const b = cartSchema.parse(req.body);
   const { checkout, orders } = await svc.createCheckout(req.user!.businessId, req.user!.userId, b.items, b.useWallet);
-  return { checkoutId: checkout.id, paidCents: checkout.paidCents, gateway: checkout.gateway, orders: orders.map(o => ({ id: o.id, number: o.number })) };
+  return { checkoutId: checkout.id, paidCents: checkout.paidCents, gateway: checkout.gateway, invoiceUrl: checkout.invoiceUrl, orders: orders.map(o => ({ id: o.id, number: o.number })) };
 }));
 
 // Fase 1: gateway simulado. Na Fase 2 a confirmacao vem so do webhook do Asaas.
@@ -151,6 +151,6 @@ marketplaceAdminRoutes.post('/orders/:id/advance', wrap(async req => {
 }));
 marketplaceAdminRoutes.post('/orders/:id/refund', wrap(async req => {
   const reason = z.string().max(300).optional().parse(req.body?.reason);
-  return svc.refundOrder(req.params.id, actorOf(req), reason);
+  return svc.refundOrderWithGateway(req.params.id, actorOf(req), reason);
 }));
 marketplaceAdminRoutes.post('/jobs/release-cashback', wrap(async () => svc.releaseDueCashback()));
