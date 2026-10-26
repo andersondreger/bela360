@@ -11,8 +11,8 @@ import {
 } from '@/lib/marketplace';
 
 const TABS = [
-  { key: 'geral', label: 'Visão geral' },
   { key: 'catalogo', label: 'Marketplace' },
+  { key: 'geral', label: 'Visão geral' },
   { key: 'pedidos', label: 'Pedidos' },
   { key: 'cashback', label: 'Cashback' },
   { key: 'financeiro', label: 'Financeiro' },
@@ -359,7 +359,7 @@ function Mensagens() {
 function MarketplaceInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const tab = (TABS.find(t => t.key === sp.get('tab'))?.key ?? 'geral') as Tab;
+  const tab = (TABS.find(t => t.key === sp.get('tab'))?.key ?? 'catalogo') as Tab;
   const go = (t: Tab) => router.replace(`/marketplace?tab=${t}`);
   const [cart, setCartState] = useState<CartLine[]>([]);
   const [open, setOpen] = useState(false);

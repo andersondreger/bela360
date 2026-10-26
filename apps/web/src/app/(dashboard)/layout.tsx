@@ -29,13 +29,13 @@ import { hexToHsl, shiftHslHue } from '@/lib/utils';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Marketplace', href: '/marketplace', icon: ShoppingBag },
   { name: 'Agenda', href: '/agenda', icon: Calendar },
   { name: 'Clientes', href: '/clientes', icon: Users },
   { name: 'Serviços', href: '/servicos', icon: Scissors },
   { name: 'Lista de Espera', href: '/lista-espera', icon: Clock },
   { name: 'Fidelidade', href: '/fidelidade', icon: Heart },
   { name: 'Estoque', href: '/estoque', icon: Package },
-  { name: 'Marketplace', href: '/marketplace', icon: ShoppingBag },
   { name: 'Financeiro', href: '/financeiro', icon: Wallet },
   { name: 'Marketing', href: '/marketing', icon: Megaphone },
   { name: 'Automação', href: '/automacao', icon: Zap },
