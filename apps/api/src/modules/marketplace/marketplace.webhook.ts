@@ -47,8 +47,9 @@ export async function processAsaasEvent(evt: AsaasEvent): Promise<'processed' | 
         for (const o of checkout.orders) {
           try { await svc.refundOrder(o.id, 'asaas-webhook', 'estorno no gateway'); }
           catch (err) {
-            // Cashback ja liberado: o dinheiro ja voltou no Asaas, mas a regra exige aprovacao humana. Registra e segue (sem retry infinito).
-            await svc.audit(prisma, 'asaas-webhook', 'order.refund.needs-approval', 'order', o.id, undefined, { reason: (err as Error).message });
+            // Cashback ja liberado: o dinheiro ja voltou no Asaas, mas a regra exige decisao humana. Abre pedido de aprovacao.
+            await svc.requestRefundApproval(o.id, 'asaas-webhook', (err as Error).message, 'GATEWAY', true).catch(async e2 =>
+              svc.audit(prisma, 'asaas-webhook', 'order.refund.needs-approval', 'order', o.id, undefined, { reason: (e2 as Error).message }));
           }
         }
         break;

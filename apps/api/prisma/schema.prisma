@@ -1790,6 +1790,7 @@ enum LedgerType {
   USO_DE_SALDO
   CANCELAMENTO
   ESTORNO
+  CASHBACK_REVERTIDO // estorno aprovado depois da liberacao: debita o cashback ja disponivel
 }
 
 // Linha unica (id = "default"): regras globais editadas pelo CEO.
@@ -2021,4 +2022,31 @@ model MarketplaceNotifyPref {
   updatedAt       DateTime  @updatedAt
 
   @@map("marketplace_notify_prefs")
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace Fase 4: estorno de pedido com cashback ja liberado exige aprovacao explicita
+// ---------------------------------------------------------------------------
+
+enum RefundRequestStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
+model MarketplaceRefundRequest {
+  id               String              @id @default(cuid())
+  orderId          String              @unique
+  status           RefundRequestStatus @default(PENDENTE)
+  reason           String?
+  source           String // CEO | GATEWAY (o Asaas ja devolveu o dinheiro)
+  gatewayRefunded  Boolean             @default(false)
+  requestedBy      String
+  decidedBy        String?
+  decisionNote     String?
+  createdAt        DateTime            @default(now())
+  decidedAt        DateTime?
+
+  @@index([status, createdAt])
+  @@map("marketplace_refund_requests")
 }

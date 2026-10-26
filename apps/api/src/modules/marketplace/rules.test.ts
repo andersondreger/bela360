@@ -73,3 +73,15 @@ describe('regras do marketplace', () => {
     expect(() => orderMoney(10.5, 1200, DEFAULT_RULES)).toThrow();
   });
 });
+
+describe('balanceOf com cashback revertido (estorno aprovado apos liberacao)', () => {
+  it('debita do disponivel e pode ficar negativo se o saldo ja foi gasto', () => {
+    const b = balanceOf([
+      { type: 'CASHBACK_PREVISTO', amountCents: 6000 }, { type: 'CASHBACK_LIBERADO', amountCents: 6000 },
+      { type: 'USO_DE_SALDO', amountCents: 5000 }, { type: 'CASHBACK_REVERTIDO', amountCents: 6000 },
+    ]);
+    expect(b.availableCents).toBe(-5000);
+    expect(b.pendingCents).toBe(0);
+    expect(walletUsable(100_000, b.availableCents, 30)).toBe(0);
+  });
+});

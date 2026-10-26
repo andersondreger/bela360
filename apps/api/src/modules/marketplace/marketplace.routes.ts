@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { env, prisma } from '../../config';
 import { AuthorizationError, NotFoundError } from '../../common/errors';
 import { authMiddleware } from '../../common/middleware/auth.middleware';
@@ -54,7 +55,14 @@ marketplaceRoutes.post('/cart/quote', wrap(async req => {
   };
 }));
 
-marketplaceRoutes.post('/checkout', requireBuyer, wrap(async req => {
+// Cada checkout cria uma cobranca no gateway: teto por clinica (e nao por IP) para conter abuso/loop de front.
+const checkoutLimiter = rateLimit({
+  windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: req => `mk-checkout:${req.user?.businessId ?? 'anon'}`,
+  handler: (_req, res) => res.status(429).json({ success: false, error: { message: 'Muitas tentativas de compra. Aguarde um minuto.' } }),
+});
+
+marketplaceRoutes.post('/checkout', requireBuyer, checkoutLimiter, wrap(async req => {
   const b = cartSchema.parse(req.body);
   const { checkout, orders } = await svc.createCheckout(req.user!.businessId, req.user!.userId, b.items, b.useWallet);
   return { checkoutId: checkout.id, paidCents: checkout.paidCents, gateway: checkout.gateway, invoiceUrl: checkout.invoiceUrl, orders: orders.map(o => ({ id: o.id, number: o.number })) };
@@ -177,3 +185,14 @@ marketplaceAdminRoutes.put('/messages/templates', wrap(async req => {
   return msg.upsertTemplate(b.type as any, b.channel, { body: b.body, waTemplateName: b.waTemplateName, active: b.active });
 }));
 marketplaceAdminRoutes.post('/jobs/dispatch-messages', wrap(async () => msg.dispatchPending()));
+
+// Estorno de pedido com cashback ja liberado: pedido de aprovacao + decisao explicita.
+marketplaceAdminRoutes.get('/refund-requests', wrap(async req => {
+  const status = z.enum(['PENDENTE', 'APROVADO', 'REJEITADO']).optional().parse(req.query.status);
+  return svc.listRefundRequests(status);
+}));
+marketplaceAdminRoutes.post('/refund-requests/:id/decide', wrap(async req => {
+  const b = z.object({ decision: z.enum(['APROVAR', 'REJEITAR']), note: z.string().max(300).optional() }).parse(req.body);
+  return svc.decideRefund(req.params.id, actorOf(req), b.decision, b.note);
+}));
+marketplaceAdminRoutes.post('/jobs/expire-checkouts', wrap(async () => svc.expireStaleCheckouts()));

@@ -1,6 +1,7 @@
 import { Prisma, MarketplaceOrderStatus, LedgerType } from '@prisma/client';
 import { prisma } from '../../config';
 import { ConflictError, NotFoundError, ValidationError } from '../../common/errors';
+import { tenantRead } from './tenant';
 import { enqueueMany, enqueueOrderMessages } from './messages.service';
 import { asaasEnabled, asaasGateway, walletIdLooksValid } from './asaas.gateway';
 import {
@@ -29,13 +30,16 @@ export async function audit(db: Tx | typeof prisma, actor: string, action: strin
 
 // ---------- ledger / carteira ----------
 
+/** Pedido que de fato gerou venda: pago e nao estornado (RECEBIDO ainda nao entrou no financeiro). */
+const isPaidLive = (o: { status: MarketplaceOrderStatus }) => o.status !== 'ESTORNADO' && o.status !== 'RECEBIDO';
+
 async function ledgerEntries(db: Tx | typeof prisma, businessId: string): Promise<LedgerEntry[]> {
   const rows = await db.cashbackLedger.findMany({ where: { businessId }, select: { type: true, amountCents: true } });
   return rows;
 }
 
-export async function walletOf(businessId: string) {
-  return balanceOf(await ledgerEntries(prisma, businessId));
+export async function walletOf(businessId: string, db: Tx | typeof prisma = prisma) {
+  return balanceOf(await ledgerEntries(db, businessId));
 }
 
 /** Grava um lancamento; se o par (pedido, tipo) ja existe, ignora (idempotencia). */
@@ -263,29 +267,100 @@ export async function releaseDueCashback(now = new Date()): Promise<{ released: 
   return { released };
 }
 
-/** Estorno iniciado pelo CEO: com Asaas, devolve o dinheiro no gateway (o split acompanha) e depois desfaz o pedido. */
-export async function refundOrderWithGateway(orderId: string, actor: string, reason?: string) {
+/**
+ * Checkouts pendentes ha mais de `maxAgeHours` seguram saldo do cliente e nunca expiram no modo simulado.
+ * Com Asaas, apaga a cobranca primeiro; se o Asaas recusar (ex.: ja paga), NAO cancela localmente.
+ */
+export async function expireStaleCheckouts(now = new Date(), maxAgeHours = 72): Promise<{ expired: number }> {
+  const stale = await prisma.marketplaceCheckout.findMany({ where: { status: 'PENDENTE', createdAt: { lt: new Date(now.getTime() - maxAgeHours * 3_600_000) } }, select: { id: true, gateway: true, gatewayPaymentId: true } });
+  let expired = 0;
+  for (const c of stale) {
+    try {
+      if (c.gateway === 'asaas' && c.gatewayPaymentId) await asaasGateway.deletePayment(c.gatewayPaymentId);
+      await cancelUnpaidCheckout(c.id, 'sistema', `checkout pendente ha mais de ${maxAgeHours}h`);
+      expired++;
+    } catch { /* fica pendente; o webhook do Asaas ou a proxima rodada resolve */ }
+  }
+  return { expired };
+}
+
+/**
+ * Estorno iniciado pelo CEO: com Asaas, devolve o dinheiro no gateway (o split acompanha) e depois desfaz o pedido.
+ * Pedido com cashback ja liberado NAO e estornado direto: abre um pedido de aprovacao (`approveRefund` decide).
+ */
+export async function refundOrderWithGateway(orderId: string, actor: string, reason?: string): Promise<{ pendingApproval: true; requestId: string } | Awaited<ReturnType<typeof refundOrder>>> {
+  const o = await prisma.marketplaceOrder.findUnique({ where: { id: orderId } });
+  if (!o) throw new NotFoundError('Pedido');
+  if (o.status === 'CASHBACK_LIBERADO') {
+    const r = await requestRefundApproval(orderId, actor, reason, 'CEO', false);
+    return { pendingApproval: true, requestId: r.id };
+  }
+  await gatewayRefundIfNeeded(orderId);
+  return refundOrder(orderId, actor, reason);
+}
+
+async function gatewayRefundIfNeeded(orderId: string) {
   const o = await prisma.marketplaceOrder.findUnique({ where: { id: orderId }, include: { checkout: true } });
   if (!o) throw new NotFoundError('Pedido');
-  if (o.status === 'CASHBACK_LIBERADO') throw new ConflictError('Cashback ja liberado: estorno exige fluxo de aprovacao (nao disponivel nesta versao)');
   if (o.status !== 'ESTORNADO' && o.checkout.gateway === 'asaas' && o.checkout.gatewayPaymentId && o.checkout.status === 'PAGO') {
     const siblings = await prisma.marketplaceOrder.count({ where: { checkoutId: o.checkoutId, status: { not: 'ESTORNADO' }, id: { not: o.id } } });
     await asaasGateway.refund(o.checkout.gatewayPaymentId, siblings === 0 ? null : o.paidCents);
   }
-  return refundOrder(orderId, actor, reason);
+}
+
+/** Abre (ou reabre, se estava rejeitado) o pedido de aprovacao de estorno de um pedido com cashback liberado. */
+export async function requestRefundApproval(orderId: string, actor: string, reason: string | undefined, source: 'CEO' | 'GATEWAY', gatewayRefunded: boolean) {
+  const o = await prisma.marketplaceOrder.findUnique({ where: { id: orderId } });
+  if (!o) throw new NotFoundError('Pedido');
+  if (o.status !== 'CASHBACK_LIBERADO') throw new ConflictError('Aprovacao so se aplica a pedido com cashback liberado');
+  const cur = await prisma.marketplaceRefundRequest.findUnique({ where: { orderId } });
+  if (cur && cur.status !== 'REJEITADO') return cur; // idempotente (pendente ou ja aprovado)
+  const data = { status: 'PENDENTE' as const, reason: reason ?? null, source, gatewayRefunded: gatewayRefunded || !!cur?.gatewayRefunded, requestedBy: actor, decidedBy: null, decisionNote: null, decidedAt: null };
+  const r = cur
+    ? await prisma.marketplaceRefundRequest.update({ where: { orderId }, data })
+    : await prisma.marketplaceRefundRequest.create({ data: { orderId, ...data } });
+  await audit(prisma, actor, 'order.refund.requested', 'order', orderId, undefined, { source, gatewayRefunded, reason });
+  return r;
+}
+
+export async function listRefundRequests(status?: 'PENDENTE' | 'APROVADO' | 'REJEITADO') {
+  const rows = await prisma.marketplaceRefundRequest.findMany({ where: status ? { status } : {}, orderBy: { createdAt: 'desc' }, take: 100 });
+  const orders = await prisma.marketplaceOrder.findMany({
+    where: { id: { in: rows.map(r => r.orderId) } },
+    select: { id: true, number: true, paidCents: true, walletUsedCents: true, cashbackCents: true, status: true, business: { select: { name: true } }, distributor: { select: { name: true } } },
+  });
+  const byId = new Map(orders.map(o => [o.id, o]));
+  return rows.map(r => ({ ...r, order: byId.get(r.orderId) ?? null }));
+}
+
+/** Decisao humana: aprova (devolve no gateway se preciso e reverte o cashback ja liberado) ou rejeita. */
+export async function decideRefund(requestId: string, actor: string, decision: 'APROVAR' | 'REJEITAR', note?: string) {
+  const r = await prisma.marketplaceRefundRequest.findUnique({ where: { id: requestId } });
+  if (!r) throw new NotFoundError('Pedido de aprovacao');
+  if (r.status !== 'PENDENTE') throw new ConflictError('Este pedido de aprovacao ja foi decidido');
+  if (decision === 'REJEITAR') {
+    const claimed = await prisma.marketplaceRefundRequest.updateMany({ where: { id: r.id, status: 'PENDENTE' }, data: { status: 'REJEITADO', decidedBy: actor, decisionNote: note ?? null, decidedAt: new Date() } });
+    if (claimed.count) await audit(prisma, actor, 'order.refund.rejected', 'order', r.orderId, undefined, { note });
+    return { status: 'REJEITADO' as const };
+  }
+  if (!r.gatewayRefunded) await gatewayRefundIfNeeded(r.orderId); // falhou? o pedido segue PENDENTE
+  await refundOrder(r.orderId, actor, r.reason ?? 'aprovado', { approved: true });
+  await prisma.marketplaceRefundRequest.updateMany({ where: { id: r.id, status: 'PENDENTE' }, data: { status: 'APROVADO', gatewayRefunded: true, decidedBy: actor, decisionNote: note ?? null, decidedAt: new Date() } });
+  await audit(prisma, actor, 'order.refund.approved', 'order', r.orderId, undefined, { note });
+  return { status: 'APROVADO' as const };
 }
 
 /** Estorno: desfaz o split, cancela o cashback a liberar e devolve o saldo usado. */
-export async function refundOrder(orderId: string, actor: string, reason?: string) {
+export async function refundOrder(orderId: string, actor: string, reason?: string, opts: { approved?: boolean } = {}) {
   let notify = false;
   const result = await prisma.$transaction(async tx => {
     const o = await tx.marketplaceOrder.findUnique({ where: { id: orderId } });
     if (!o) throw new NotFoundError('Pedido');
     if (o.status === 'ESTORNADO') return o; // idempotente
-    if (o.status === 'CASHBACK_LIBERADO') {
-      throw new ConflictError('Cashback ja liberado: estorno exige fluxo de aprovacao (nao disponivel nesta versao)');
-    }
-    await postLedger(tx, { businessId: o.businessId, orderId: o.id, type: 'CANCELAMENTO', amountCents: o.cashbackCents, note: `Cashback cancelado: pedido #${o.number} estornado` });
+    const released = o.status === 'CASHBACK_LIBERADO';
+    if (released && !opts.approved) throw new ConflictError('Cashback ja liberado: estorno exige aprovacao');
+    if (released) await postLedger(tx, { businessId: o.businessId, orderId: o.id, type: 'CASHBACK_REVERTIDO', amountCents: o.cashbackCents, note: `Cashback revertido: pedido #${o.number} estornado apos liberacao` });
+    else await postLedger(tx, { businessId: o.businessId, orderId: o.id, type: 'CANCELAMENTO', amountCents: o.cashbackCents, note: `Cashback cancelado: pedido #${o.number} estornado` });
     await postLedger(tx, { businessId: o.businessId, orderId: o.id, type: 'ESTORNO', amountCents: o.walletUsedCents, note: `Saldo devolvido: pedido #${o.number} estornado` });
     const updated = await tx.marketplaceOrder.update({ where: { id: o.id }, data: { status: 'ESTORNADO', splitStatus: 'ESTORNADO', refundedAt: new Date() } });
     const open = await tx.marketplaceOrder.count({ where: { checkoutId: o.checkoutId, status: { not: 'ESTORNADO' } } });
@@ -309,31 +384,31 @@ export async function listOrders(businessId: string, filter: 'todos' | 'andament
   const status: MarketplaceOrderStatus[] | undefined =
     filter === 'andamento' ? ['RECEBIDO', 'PAGO', 'ENVIADO', 'ENTREGUE']
     : filter === 'concluidos' ? ['CASHBACK_LIBERADO'] : undefined;
-  return prisma.marketplaceOrder.findMany({
+  return tenantRead(businessId, tx => tx.marketplaceOrder.findMany({
     where: { businessId, ...(status ? { status: { in: status } } : {}) },
     include: orderInclude,
     orderBy: { createdAt: 'desc' },
     take: 200,
-  });
+  }));
 }
 
 export async function getOrder(businessId: string, orderId: string) {
-  const o = await prisma.marketplaceOrder.findFirst({ where: { id: orderId, businessId }, include: orderInclude });
+  const o = await tenantRead(businessId, tx => tx.marketplaceOrder.findFirst({ where: { id: orderId, businessId }, include: orderInclude }));
   if (!o) throw new NotFoundError('Pedido');
   return o;
 }
 
 export async function listLedger(businessId: string) {
-  return prisma.cashbackLedger.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' }, take: 300, include: { order: { select: { number: true } } } });
+  return tenantRead(businessId, tx => tx.cashbackLedger.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' }, take: 300, include: { order: { select: { number: true } } } }));
 }
 
 /** Area financeira do PROPRIO cliente: o que comprou, quanto voltou, quanto falta liberar. */
 export async function clientFinance(businessId: string) {
-  const [orders, wallet] = await Promise.all([
-    prisma.marketplaceOrder.findMany({ where: { businessId }, include: { distributor: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } }),
-    walletOf(businessId),
-  ]);
-  const live = orders.filter(o => o.status !== 'ESTORNADO');
+  const [orders, wallet] = await tenantRead(businessId, async tx => [
+    await tx.marketplaceOrder.findMany({ where: { businessId }, include: { distributor: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } }),
+    await walletOf(businessId, tx),
+  ] as const);
+  const live = orders.filter(isPaidLive); // so pedidos pagos e nao estornados contam como compra
   const byDist = new Map<string, { id: string; name: string; orders: number; paidCents: number; cashbackCents: number }>();
   for (const o of live) {
     const d = byDist.get(o.distributorId) ?? { id: o.distributorId, name: o.distributor.name, orders: 0, paidCents: 0, cashbackCents: 0 };
@@ -345,7 +420,7 @@ export async function clientFinance(businessId: string) {
       purchasedCents: live.reduce((a, o) => a + o.paidCents, 0),
       walletUsedCents: live.reduce((a, o) => a + o.walletUsedCents, 0),
       cashbackEarnedCents: live.reduce((a, o) => a + o.cashbackCents, 0),
-      refundedCents: orders.filter(o => o.status === 'ESTORNADO').reduce((a, o) => a + o.paidCents, 0),
+      refundedCents: orders.filter(o => o.status === 'ESTORNADO' && o.paidAt).reduce((a, o) => a + o.paidCents, 0),
     },
     wallet,
     byDistributor: [...byDist.values()],
@@ -359,17 +434,18 @@ export async function clientFinance(businessId: string) {
 
 export async function clientOverview(businessId: string) {
   const rules = await getRules();
-  const [wallet, orders] = await Promise.all([
-    walletOf(businessId),
-    prisma.marketplaceOrder.findMany({ where: { businessId }, include: orderInclude, orderBy: { createdAt: 'desc' } }),
-  ]);
-  const live = orders.filter(o => o.status !== 'ESTORNADO');
+  const [wallet, orders] = await tenantRead(businessId, async tx => [
+    await walletOf(businessId, tx),
+    await tx.marketplaceOrder.findMany({ where: { businessId }, include: orderInclude, orderBy: { createdAt: 'desc' } }),
+  ] as const);
+  const open = orders.filter(o => o.status !== 'ESTORNADO');
+  const live = orders.filter(isPaidLive);
   const commissionCents = live.reduce((a, o) => a + o.commissionCents, 0);
   const cashbackCents = live.reduce((a, o) => a + o.cashbackCents, 0);
   return {
     wallet,
     rules: { cashbackSharePct: rules.cashbackSharePct, walletLimitPct: rules.walletLimitPct, returnDays: rules.returnDays },
-    inProgress: live.filter(o => o.status !== 'CASHBACK_LIBERADO').length,
+    inProgress: open.filter(o => o.status !== 'CASHBACK_LIBERADO').length,
     purchasedCents: live.reduce((a, o) => a + o.paidCents, 0),
     commissionSplit: { toClientCents: cashbackCents, toBelaCents: commissionCents - cashbackCents },
     recent: orders.slice(0, 3),
@@ -380,7 +456,7 @@ export async function clientOverview(businessId: string) {
 
 export async function ceoFinance() {
   const orders = await prisma.marketplaceOrder.findMany({ include: { distributor: { select: { id: true, name: true } }, business: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } });
-  const live = orders.filter(o => o.status !== 'ESTORNADO');
+  const live = orders.filter(isPaidLive);
   const sum = (f: (o: (typeof live)[number]) => number) => live.reduce((a, o) => a + f(o), 0);
   const grossCents = sum(o => o.paidCents);
   const commissionCents = sum(o => o.commissionCents);
@@ -420,7 +496,7 @@ export async function ceoClients() {
   const [businesses, ledger, orders] = await Promise.all([
     prisma.business.findMany({ where: { mkOrders: { some: {} } }, select: { id: true, name: true } }),
     prisma.cashbackLedger.groupBy({ by: ['businessId', 'type'], _sum: { amountCents: true } }),
-    prisma.marketplaceOrder.groupBy({ by: ['businessId'], where: { status: { not: 'ESTORNADO' } }, _sum: { paidCents: true }, _count: true }),
+    prisma.marketplaceOrder.groupBy({ by: ['businessId'], where: { status: { notIn: ['ESTORNADO', 'RECEBIDO'] } }, _sum: { paidCents: true }, _count: true }),
   ]);
   return businesses.map(b => {
     const entries = ledger.filter(l => l.businessId === b.id).map(l => ({ type: l.type, amountCents: l._sum.amountCents ?? 0 }));

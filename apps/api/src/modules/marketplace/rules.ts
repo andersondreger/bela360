@@ -6,7 +6,7 @@ export type LedgerType =
   | 'CASHBACK_LIBERADO'
   | 'USO_DE_SALDO'
   | 'CANCELAMENTO'
-  | 'ESTORNO';
+  | 'ESTORNO' | 'CASHBACK_REVERTIDO';
 
 export interface LedgerEntry {
   type: LedgerType;
@@ -84,7 +84,7 @@ export interface Balance {
 
 /** Saldo derivado do ledger append-only. Nunca ha coluna de saldo para editar. */
 export function balanceOf(entries: LedgerEntry[]): Balance {
-  let previsto = 0, liberado = 0, uso = 0, cancel = 0, estorno = 0;
+  let previsto = 0, liberado = 0, uso = 0, cancel = 0, estorno = 0, revertido = 0;
   for (const e of entries) {
     assertCents(e.amountCents);
     if (e.type === 'CASHBACK_PREVISTO') previsto += e.amountCents;
@@ -92,9 +92,10 @@ export function balanceOf(entries: LedgerEntry[]): Balance {
     else if (e.type === 'USO_DE_SALDO') uso += e.amountCents;
     else if (e.type === 'CANCELAMENTO') cancel += e.amountCents;
     else if (e.type === 'ESTORNO') estorno += e.amountCents;
+    else if (e.type === 'CASHBACK_REVERTIDO') revertido += e.amountCents;
   }
   return {
-    availableCents: liberado - uso + estorno,
+    availableCents: liberado - uso + estorno - revertido,
     pendingCents: previsto - liberado - cancel,
     usedCents: uso - estorno,
     releasedCents: liberado,
