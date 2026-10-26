@@ -78,6 +78,17 @@ const envSchema = z.object({
   MARKETPLACE_ASAAS_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().url().optional()), // so para testes (Asaas simulado)
   MARKETPLACE_ASAAS_WEBHOOK_TOKEN: optionalSecret(24),
   MARKETPLACE_SERVICE_TOKEN: optionalSecret(24),
+
+  // Mensagens do marketplace (Fase 3): off = nada; simulado = so registra; ativo = envia de verdade.
+  MARKETPLACE_MESSAGES: z.enum(['off', 'simulado', 'ativo']).default('simulado'),
+  MARKETPLACE_WA_TOKEN: optionalSecret(1), // WhatsApp Cloud API oficial (token permanente do usuario do sistema)
+  MARKETPLACE_WA_PHONE_ID: optionalSecret(1),
+  MARKETPLACE_WA_API_VERSION: z.string().default('v21.0'),
+  MARKETPLACE_WA_LANG: z.string().default('pt_BR'),
+  MARKETPLACE_WA_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().url().optional()), // so para testes
+  MARKETPLACE_EMAIL_API_KEY: optionalSecret(1), // Resend (HTTP)
+  MARKETPLACE_EMAIL_FROM: optionalSecret(3),
+  MARKETPLACE_EMAIL_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().url().optional()), // so para testes
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -16,15 +16,20 @@ Modulo dentro do monorepo bela360 (Express + Prisma/Postgres, tenant = `Business
 - **walletId**: o Asaas nao oferece consulta publica de carteira de terceiros; validamos o formato (UUID) ao ativar e o Asaas recusa carteira inexistente na criacao da cobranca (nada e cobrado, pedido local e desfeito).
 - **Gateway**: `MARKETPLACE_GATEWAY=simulado` (Fase 1) confirma pagamento por `POST /checkout/:id/simulate-pay` (404 quando `asaas`).
 
+- **Mensagens (Fase 3)** (`messages.service.ts`, `messages.templates.ts`, `messages.providers.ts`): so avisos TRANSACIONAIS do proprio pedido (pago, enviado, entregue, cashback liberado, estornado; `NOVO_PEDIDO` ao distribuidor). Nunca marketing/massa. Fila em `marketplace_messages` com `@@unique([orderId,type,channel,audience])` (retry/webhook repetido nao duplica); enfileirar e enviar ficam FORA das transacoes financeiras (falha de mensagem nunca desfaz dinheiro). Job a cada 1 min, 30 por rodada, 3 tentativas. `MARKETPLACE_MESSAGES`: off | simulado (so registra) | ativo.
+  - **Consentimento**: WhatsApp so com opt-in registrado em `marketplace_notify_prefs` (quem e quando; comeca DESLIGADO) e telefone BR valido; e-mail liga por padrao e o cliente pode desligar; distribuidor so por e-mail. Sem consentimento a linha nasce `IGNORADO` com o motivo (auditavel).
+  - **WhatsApp**: Cloud API oficial, mensagem iniciada pela empresa = template aprovado. Nomes padrao `bela360_mk_<tipo>` (categoria UTILITY, idioma pt_BR), parametros {{1}}.. na ordem de `WA_VARS`: pedido_pago (nome, pedido, valor), pedido_enviado (nome, pedido, distribuidor), pedido_entregue e cashback_liberado (nome, pedido, cashback), pedido_estornado (nome, pedido, valor), novo_pedido (distribuidor, pedido, valor). CEO pode trocar o nome/texto em `marketplace_message_templates`.
+  - **E-mail**: Resend por HTTP (`MARKETPLACE_EMAIL_API_KEY`/`FROM`), sem dependencia nova.
+
 ## Desvios conscientes do prompt original
 - Sem Zustand (carrinho em `useState` + localStorage) e sem RLS do Supabase: o bela360 usa Postgres proprio + Prisma; isolamento por `businessId` no servidor, coberto por teste de integracao. RLS no Postgres pode entrar na Fase 4.
 - "Distribuidores" e "Configuracoes" (comissao, cashback, limites) ficam so na visao CEO; o cliente ve o proprio financeiro e cashback.
 
 ## Testes
 - `npx vitest run` (regras puras, sempre).
-- Integracao com banco real: `MK_TEST_DATABASE_URL=postgresql://... npx vitest run marketplace.integration` (Postgres descartavel com `prisma migrate deploy`).
+- Integracao com banco real: `MK_TEST_DATABASE_URL=postgresql://... npx vitest run src/modules/marketplace` (Postgres descartavel e VAZIO, com `prisma migrate deploy`; ids fixos dos simuladores colidem se o banco for reaproveitado entre rodadas).
 
 ## Pendente
 - Fase 2: codigo pronto e testado contra Asaas simulado; falta rodar no sandbox REAL (chave + webhook) e conferir estorno parcial com split.
-- Fase 3: Mensagens (WhatsApp Cloud API oficial + e-mail, chave unica pedido+tipo+canal), taxa real do Asaas.
+- Fase 3: codigo pronto e testado contra WhatsApp/e-mail simulados; falta conta Meta Cloud API com os templates aprovados e chave do e-mail para `MARKETPLACE_MESSAGES=ativo`. Taxa real do Asaas ja entra via `netValue`.
 - Fase 4: revisao de seguranca, RLS, deploy.

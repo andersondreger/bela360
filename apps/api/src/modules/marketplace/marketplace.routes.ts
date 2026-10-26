@@ -5,6 +5,8 @@ import { env, prisma } from '../../config';
 import { AuthorizationError, NotFoundError } from '../../common/errors';
 import { authMiddleware } from '../../common/middleware/auth.middleware';
 import * as svc from './marketplace.service';
+import * as msg from './messages.service';
+import { MESSAGE_TYPES } from './messages.templates';
 
 const ok = (res: Response, data: unknown) => res.json({ success: true, data });
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => {
@@ -28,6 +30,14 @@ const cartSchema = z.object({
 });
 
 marketplaceRoutes.get('/overview', wrap(async req => svc.clientOverview(req.user!.businessId)));
+
+marketplaceRoutes.get('/messages', wrap(async req => msg.clientMessagesView(req.user!.businessId)));
+// Consentimento: so dono/admin liga o WhatsApp (fica registrado quem e quando, para LGPD/Meta).
+marketplaceRoutes.put('/messages/preferences', requireBuyer, wrap(async req => {
+  const b = z.object({ whatsappOptIn: z.boolean().optional(), emailOptIn: z.boolean().optional() }).parse(req.body);
+  await msg.setPref(req.user!.businessId, req.user!.userId, b);
+  return msg.clientMessagesView(req.user!.businessId);
+}));
 
 marketplaceRoutes.get('/catalog', wrap(async req => {
   const q = z.object({ category: z.enum(['CABELO', 'ESTETICA_FACIAL', 'CORPORAL', 'DESCARTAVEIS', 'EQUIPAMENTOS']).optional(), q: z.string().max(80).optional() }).parse(req.query);
@@ -154,3 +164,16 @@ marketplaceAdminRoutes.post('/orders/:id/refund', wrap(async req => {
   return svc.refundOrderWithGateway(req.params.id, actorOf(req), reason);
 }));
 marketplaceAdminRoutes.post('/jobs/release-cashback', wrap(async () => svc.releaseDueCashback()));
+
+marketplaceAdminRoutes.get('/messages', wrap(async () => msg.ceoMessagesView()));
+marketplaceAdminRoutes.put('/messages/templates', wrap(async req => {
+  const b = z.object({
+    type: z.enum(MESSAGE_TYPES as [string, ...string[]]),
+    channel: z.enum(['WHATSAPP', 'EMAIL']),
+    body: z.string().trim().min(5).max(1000).optional(),
+    waTemplateName: z.string().trim().regex(/^[a-z0-9_]{1,512}$/).nullish(),
+    active: z.boolean().optional(),
+  }).parse(req.body);
+  return msg.upsertTemplate(b.type as any, b.channel, { body: b.body, waTemplateName: b.waTemplateName, active: b.active });
+}));
+marketplaceAdminRoutes.post('/jobs/dispatch-messages', wrap(async () => msg.dispatchPending()));

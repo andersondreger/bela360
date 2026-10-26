@@ -1959,3 +1959,66 @@ model MarketplaceWebhookEvent {
   @@index([paymentId])
   @@map("marketplace_webhook_events")
 }
+
+// ---------------------------------------------------------------------------
+// Marketplace Fase 3: mensagens transacionais (WhatsApp Cloud API oficial + e-mail)
+// ---------------------------------------------------------------------------
+
+enum MarketplaceMessageStatus {
+  PENDENTE
+  ENVIADO
+  SIMULADO
+  FALHOU
+  IGNORADO
+}
+
+// Uma mensagem por pedido + tipo + canal + destinatario: a chave unica impede duplicidade mesmo com retry/webhook repetido.
+model MarketplaceMessage {
+  id         String                   @id @default(cuid())
+  businessId String
+  orderId    String
+  type       String // PEDIDO_PAGO | PEDIDO_ENVIADO | PEDIDO_ENTREGUE | CASHBACK_LIBERADO | PEDIDO_ESTORNADO | NOVO_PEDIDO
+  channel    String // WHATSAPP | EMAIL
+  audience   String // CLIENTE | DISTRIBUIDOR
+  toAddress  String?
+  subject    String?
+  body       String
+  params     Json? // variaveis na ordem do template aprovado na Meta
+  status     MarketplaceMessageStatus @default(PENDENTE)
+  attempts   Int                      @default(0)
+  providerId String?
+  error      String?
+  createdAt  DateTime                 @default(now())
+  sentAt     DateTime?
+
+  @@unique([orderId, type, channel, audience])
+  @@index([status, createdAt])
+  @@index([businessId, createdAt])
+  @@map("marketplace_messages")
+}
+
+// Textos editaveis pelo CEO (e-mail e log); no WhatsApp so vale o template aprovado na Meta (waTemplateName).
+model MarketplaceMessageTemplate {
+  id             String   @id @default(cuid())
+  type           String
+  channel        String
+  body           String
+  waTemplateName String?
+  active         Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([type, channel])
+  @@map("marketplace_message_templates")
+}
+
+// Consentimento do cliente (prova de opt-in para a LGPD e para a Meta). WhatsApp comeca DESLIGADO.
+model MarketplaceNotifyPref {
+  businessId      String    @id
+  whatsappOptIn   Boolean   @default(false)
+  whatsappOptInAt DateTime?
+  whatsappOptInBy String?
+  emailOptIn      Boolean   @default(true)
+  updatedAt       DateTime  @updatedAt
+
+  @@map("marketplace_notify_prefs")
+}

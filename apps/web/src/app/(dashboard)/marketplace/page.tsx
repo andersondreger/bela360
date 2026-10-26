@@ -16,6 +16,7 @@ const TABS = [
   { key: 'pedidos', label: 'Pedidos' },
   { key: 'cashback', label: 'Cashback' },
   { key: 'financeiro', label: 'Financeiro' },
+  { key: 'mensagens', label: 'Mensagens' },
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
@@ -311,6 +312,49 @@ function Financeiro() {
   );
 }
 
+// ---------------------------------------------------------------- Mensagens
+const MSG_TYPE: Record<string, string> = { PEDIDO_PAGO: 'Pagamento confirmado', PEDIDO_ENVIADO: 'Pedido enviado', PEDIDO_ENTREGUE: 'Pedido entregue', CASHBACK_LIBERADO: 'Cashback liberado', PEDIDO_ESTORNADO: 'Pedido estornado' };
+const MSG_STATUS: Record<string, string> = { PENDENTE: 'Na fila', ENVIADO: 'Enviada', SIMULADO: 'Registrada (teste)', FALHOU: 'Falhou', IGNORADO: 'Não enviada' };
+
+function Mensagens() {
+  const { data, error, loading, reload } = useAsync(() => marketplaceApi.messages(), []);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const set = async (p: { whatsappOptIn?: boolean; emailOptIn?: boolean }) => {
+    setBusy(true); setErr('');
+    try { await marketplaceApi.setPreferences(p); reload(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  if (loading && !data) return <p className="text-muted-foreground">Carregando…</p>;
+  if (!data) return <p role="alert" className="text-red-600">{error}</p>;
+  const { pref } = data;
+  return (
+    <div className="space-y-4">
+      <Card><CardContent className="space-y-4 p-5">
+        <div>
+          <h3 className="text-lg font-semibold">Avisos sobre os seus pedidos</h3>
+          <p className="text-sm text-muted-foreground">Você recebe avisos de pagamento, envio, entrega, cashback liberado e estorno. Só falamos do seu pedido, nunca de promoções.{data.mode !== 'ativo' && ' (Envio ainda em fase de teste: os avisos ficam só registrados abaixo.)'}</p>
+        </div>
+        <label className="flex items-start gap-3 rounded-xl bg-muted p-3">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={pref.whatsappOptIn} disabled={busy} onChange={e => set({ whatsappOptIn: e.target.checked })} />
+          <span className="text-sm"><b>Receber por WhatsApp</b><br />Autorizo a Bela 360 a me enviar mensagens de WhatsApp sobre os meus pedidos do marketplace, no número cadastrado da conta. Posso desligar quando quiser.{pref.whatsappOptIn && pref.whatsappOptInAt && <span className="block text-xs text-muted-foreground">Autorizado em {new Date(pref.whatsappOptInAt).toLocaleDateString('pt-BR')}</span>}</span>
+        </label>
+        <label className="flex items-start gap-3 rounded-xl bg-muted p-3">
+          <input type="checkbox" className="mt-1 h-4 w-4" checked={pref.emailOptIn} disabled={busy} onChange={e => set({ emailOptIn: e.target.checked })} />
+          <span className="text-sm"><b>Receber por e-mail</b><br />No e-mail cadastrado da conta.</span>
+        </label>
+        {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
+      </CardContent></Card>
+      <h3 className="font-semibold">Histórico</h3>
+      {data.messages.filter(m => m.status !== 'IGNORADO').length === 0 && <p className="text-muted-foreground">Nenhum aviso ainda.</p>}
+      {data.messages.filter(m => m.status !== 'IGNORADO').map(m => (
+        <Card key={m.id}><CardContent className="flex items-start justify-between gap-3 p-4">
+          <div className="min-w-0"><b>{MSG_TYPE[m.type] ?? m.type}</b><p className="truncate text-sm text-muted-foreground">{m.body}</p></div>
+          <div className="shrink-0 text-right text-xs text-muted-foreground"><p>{m.channel === 'WHATSAPP' ? 'WhatsApp' : 'E-mail'}</p><p>{MSG_STATUS[m.status]} · {fdate(m.createdAt)}</p></div>
+        </CardContent></Card>))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- Página
 function MarketplaceInner() {
   const router = useRouter();
@@ -342,6 +386,7 @@ function MarketplaceInner() {
         {tab === 'pedidos' && <Pedidos />}
         {tab === 'cashback' && <Cashback />}
         {tab === 'financeiro' && <Financeiro />}
+        {tab === 'mensagens' && <Mensagens />}
       </div>
       <CartDrawer cart={cart} setCart={setCart} open={open} onClose={() => setOpen(false)} onDone={() => { setVersion(v => v + 1); setToast('Pedido feito! Acompanhe em Pedidos.'); setTimeout(() => setToast(''), 3500); go('pedidos'); }} />
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background">{toast}</div>}

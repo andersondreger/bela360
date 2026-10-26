@@ -44,6 +44,8 @@ export interface ClientFinance {
   byDistributor: { id: string; name: string; orders: number; paidCents: number; cashbackCents: number }[];
   orders: { id: string; number: number; createdAt: string; status: OrderStatus; splitStatus: string; distributor: string; paidCents: number; walletUsedCents: number; cashbackCents: number; releaseAt: string | null }[];
 }
+export interface NotifyMessage { id: string; orderId: string; type: string; channel: 'WHATSAPP' | 'EMAIL'; status: 'PENDENTE' | 'ENVIADO' | 'SIMULADO' | 'FALHOU' | 'IGNORADO'; subject: string | null; body: string; error: string | null; createdAt: string; sentAt: string | null }
+export interface MessagesView { mode: 'off' | 'simulado' | 'ativo'; pref: { whatsappOptIn: boolean; whatsappOptInAt: string | null; emailOptIn: boolean }; messages: NotifyMessage[] }
 export type CartLine = { productId: string; qty: number };
 
 export const marketplaceApi = {
@@ -59,4 +61,6 @@ export const marketplaceApi = {
   orders: (filter: 'todos' | 'andamento' | 'concluidos') => api.get<Order[]>(`/marketplace/orders?filter=${filter}`),
   cashback: () => api.get<{ wallet: Balance; ledger: LedgerRow[] }>('/marketplace/cashback'),
   finance: () => api.get<ClientFinance>('/marketplace/finance'),
+  messages: () => api.get<MessagesView>('/marketplace/messages'),
+  setPreferences: (p: { whatsappOptIn?: boolean; emailOptIn?: boolean }) => api.put<MessagesView>('/marketplace/messages/preferences', p),
 };

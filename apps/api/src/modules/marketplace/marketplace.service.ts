@@ -1,6 +1,7 @@
 import { Prisma, MarketplaceOrderStatus, LedgerType } from '@prisma/client';
 import { prisma } from '../../config';
 import { ConflictError, NotFoundError, ValidationError } from '../../common/errors';
+import { enqueueMany, enqueueOrderMessages } from './messages.service';
 import { asaasEnabled, asaasGateway, walletIdLooksValid } from './asaas.gateway';
 import {
   DEFAULT_RULES, MarketplaceRules, allocateDiscount, balanceOf, distributorSellable, orderMoney,
@@ -190,7 +191,8 @@ export async function cancelUnpaidCheckout(checkoutId: string, actor: string, re
  * `netValueCents`: liquido real informado pelo Asaas; substitui a taxa estimada.
  */
 export async function confirmCheckoutPaid(checkoutId: string, opts: { settled?: boolean; netValueCents?: number } = {}): Promise<{ changed: boolean }> {
-  return prisma.$transaction(async tx => {
+  const newlyPaid: string[] = [];
+  const result = await prisma.$transaction(async tx => {
     const c = await tx.marketplaceCheckout.findUnique({ where: { id: checkoutId }, include: { orders: true } });
     if (!c) throw new NotFoundError('Checkout');
     const simulated = c.gateway === 'simulado';
@@ -200,6 +202,7 @@ export async function confirmCheckoutPaid(checkoutId: string, opts: { settled?: 
 
     if (c.status === 'PENDENTE') {
       await tx.marketplaceCheckout.update({ where: { id: c.id }, data: { status: 'PAGO', paidAt: now, ...(opts.netValueCents ? { netValueCents: opts.netValueCents } : {}) } });
+      newlyPaid.push(...c.orders.filter(o => o.status === 'RECEBIDO').map(o => o.id));
       await tx.marketplaceOrder.updateMany({ where: { checkoutId: c.id, status: 'RECEBIDO' }, data: { status: 'PAGO', paidAt: now } });
       // Taxa real (pago - liquido) repartida entre os pedidos, no lugar da estimativa.
       if (opts.netValueCents && opts.netValueCents > 0) {
@@ -214,12 +217,16 @@ export async function confirmCheckoutPaid(checkoutId: string, opts: { settled?: 
     }
     return { changed };
   });
+  // Fora da transacao: mensagem nunca desfaz dinheiro (e a chave unica evita duplicar em reprocessamento).
+  await enqueueMany(newlyPaid, 'PEDIDO_PAGO');
+  await enqueueMany(newlyPaid, 'NOVO_PEDIDO');
+  return result;
 }
 
 // ---------- ciclo do pedido (CEO / distribuidor) ----------
 
 export async function advanceOrder(orderId: string, to: 'ENVIADO' | 'ENTREGUE') {
-  return prisma.$transaction(async tx => {
+  const updated = await prisma.$transaction(async tx => {
     const o = await tx.marketplaceOrder.findUnique({ where: { id: orderId } });
     if (!o) throw new NotFoundError('Pedido');
     const rules = await getRules(tx);
@@ -234,21 +241,25 @@ export async function advanceOrder(orderId: string, to: 'ENVIADO' | 'ENTREGUE') 
       data: { status: 'ENTREGUE', deliveredAt: now, releaseAt: releaseDate(now, rules.returnDays) },
     });
   });
+  await enqueueOrderMessages(orderId, to === 'ENVIADO' ? 'PEDIDO_ENVIADO' : 'PEDIDO_ENTREGUE');
+  return updated;
 }
 
 /** Job diario: libera o cashback dos pedidos entregues cujo prazo de devolucao venceu. */
 export async function releaseDueCashback(now = new Date()): Promise<{ released: number }> {
   const due = await prisma.marketplaceOrder.findMany({ where: { status: 'ENTREGUE', releaseAt: { lte: now } }, select: { id: true } });
   let released = 0;
+  const releasedIds: string[] = [];
   for (const { id } of due) {
     await prisma.$transaction(async tx => {
       const o = await tx.marketplaceOrder.findUnique({ where: { id } });
       if (!o || o.status !== 'ENTREGUE') return;
       const ok = await postLedger(tx, { businessId: o.businessId, orderId: o.id, type: 'CASHBACK_LIBERADO', amountCents: o.cashbackCents, note: `Cashback liberado do pedido #${o.number}` });
       await tx.marketplaceOrder.update({ where: { id: o.id }, data: { status: 'CASHBACK_LIBERADO', releasedAt: now } });
-      if (ok) released++;
+      if (ok) { released++; releasedIds.push(id); }
     });
   }
+  await enqueueMany(releasedIds, 'CASHBACK_LIBERADO');
   return { released };
 }
 
@@ -266,7 +277,8 @@ export async function refundOrderWithGateway(orderId: string, actor: string, rea
 
 /** Estorno: desfaz o split, cancela o cashback a liberar e devolve o saldo usado. */
 export async function refundOrder(orderId: string, actor: string, reason?: string) {
-  return prisma.$transaction(async tx => {
+  let notify = false;
+  const result = await prisma.$transaction(async tx => {
     const o = await tx.marketplaceOrder.findUnique({ where: { id: orderId } });
     if (!o) throw new NotFoundError('Pedido');
     if (o.status === 'ESTORNADO') return o; // idempotente
@@ -282,8 +294,11 @@ export async function refundOrder(orderId: string, actor: string, reason?: strin
       await tx.marketplaceCheckout.update({ where: { id: o.checkoutId }, data: { status: ck?.status === 'PENDENTE' ? 'CANCELADO' : 'ESTORNADO' } });
     }
     await audit(tx, actor, 'order.refund', 'order', o.id, { status: o.status }, { status: 'ESTORNADO', reason });
+    notify = !!o.paidAt; // estorno de checkout nunca pago (expirou) nao gera aviso
     return updated;
   });
+  if (notify) await enqueueOrderMessages(orderId, 'PEDIDO_ESTORNADO');
+  return result;
 }
 
 // ---------- leitura do cliente (sempre filtrada por businessId) ----------
